@@ -24,7 +24,7 @@ export function useRooms() {
 
   // useMutation para crear una sala nueva
   const createMutation = useMutation({
-    mutationFn: (name: string) => createRoomUseCase.execute(name, [user!.id]),
+    mutationFn: (name: string) => createRoomUseCase.execute(name, user!.id),
     onSuccess: (newRoom) => {
       // Actualizar el cache 
       queryClient.setQueryData(["rooms"], (old: Room[]) => [
@@ -34,6 +34,10 @@ export function useRooms() {
     },
   });
 
+  const getRoom = async (roomId: string) => {
+    return chatRepo.getRoom(roomId);
+  };
+
   return {
     rooms,
     isLoading,
@@ -41,6 +45,7 @@ export function useRooms() {
     createRoom: createMutation.mutate,
     isCreating: createMutation.isPending,
     createError: createMutation.error?.message ?? null,
+    getRoom,
   };
 }
 

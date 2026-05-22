@@ -8,80 +8,281 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
+  const [isUsernameFocused, setIsUsernameFocused] = useState(false);
+  const [isEmailFocused, setIsEmailFocused] = useState(false);
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const { register, isLoading, error } = useAuth();
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Crear cuenta</Text>
-      {error && <Text style={styles.error}>{error}</Text>}
-      <TextInput
-        style={styles.input}
-        placeholder="Usuario (sin espacios)"
-        value={username}
-        onChangeText={setUsername}
-        autoCapitalize="none"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Correo"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Contraseña (mín. 6 caracteres)"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => register({ email, password, username })}
-        disabled={isLoading}
-      >
-        {isLoading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Registrarse</Text>
-        )}
-      </TouchableOpacity>
-      <Link href="/(auth)/login" style={styles.link}>
-        ¿Ya tienes cuenta? Inicia sesión
-      </Link>
-    </View>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.keyboardContainer}
+    >
+      <StatusBar barStyle="dark-content" />
+      <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
+        <View style={styles.container}>
+          {/* Logo Concept */}
+          <View style={styles.logoContainer}>
+            <View style={styles.logoBadge}>
+              <Text style={styles.logoText}>💬</Text>
+            </View>
+            <Text style={styles.brandName}>SpaceChat</Text>
+            <Text style={styles.brandTagline}>Crea una cuenta en segundos</Text>
+          </View>
+
+          {/* Form Card */}
+          <View style={styles.card}>
+            <Text style={styles.title}>Registrarse ✨</Text>
+            <Text style={styles.subtitle}>Comienza a chatear con tus amigos</Text>
+
+            {error && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>⚠️ {error}</Text>
+              </View>
+            )}
+
+            {/* Input Username */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Nombre de Usuario</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  isUsernameFocused && styles.inputFocused
+                ]}
+                placeholder="ej. alejo_dev"
+                placeholderTextColor="#9CA3AF"
+                value={username}
+                onChangeText={setUsername}
+                autoCapitalize="none"
+                onFocus={() => setIsUsernameFocused(true)}
+                onBlur={() => setIsUsernameFocused(false)}
+              />
+            </View>
+
+            {/* Input Email */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Correo Electrónico</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  isEmailFocused && styles.inputFocused
+                ]}
+                placeholder="nombre@ejemplo.com"
+                placeholderTextColor="#9CA3AF"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                onFocus={() => setIsEmailFocused(true)}
+                onBlur={() => setIsEmailFocused(false)}
+              />
+            </View>
+
+            {/* Input Password */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Contraseña</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  isPasswordFocused && styles.inputFocused
+                ]}
+                placeholder="Mínimo 6 caracteres"
+                placeholderTextColor="#9CA3AF"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                onFocus={() => setIsPasswordFocused(true)}
+                onBlur={() => setIsPasswordFocused(false)}
+              />
+            </View>
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[styles.button, isLoading && styles.buttonDisabled]}
+              onPress={() => register({ email, password, username })}
+              disabled={isLoading}
+              activeOpacity={0.85}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Registrarse</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Login Link */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>¿Ya tienes una cuenta? </Text>
+              <Link href="/(auth)/login" asChild>
+                <TouchableOpacity>
+                  <Text style={styles.footerLink}>Inicia Sesión</Text>
+                </TouchableOpacity>
+              </Link>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24 },
+  keyboardContainer: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
+  container: {
+    padding: 24,
+    justifyContent: "center",
+  },
+  logoContainer: {
+    alignItems: "center",
+    marginBottom: 32,
+  },
+  logoBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: "#E0E7FF",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#6366F1",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  logoText: {
+    fontSize: 32,
+  },
+  brandName: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#1F2937",
+    marginTop: 12,
+    letterSpacing: -0.5,
+  },
+  brandTagline: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginTop: 4,
+    fontWeight: "500",
+  },
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.04,
+    shadowRadius: 20,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+  },
   title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 24,
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#111827",
     textAlign: "center",
   },
-  input: {
+  subtitle: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    marginTop: 4,
+    marginBottom: 24,
+    fontWeight: "500",
+  },
+  errorContainer: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FEE2E2",
     borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 12,
-    marginBottom: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: "#EF4444",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  inputGroup: {
+    marginBottom: 18,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  input: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    color: "#1F2937",
+  },
+  inputFocused: {
+    borderColor: "#6366F1",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#6366F1",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
   },
   button: {
-    backgroundColor: "#007AFF",
-    borderRadius: 8,
-    padding: 14,
+    backgroundColor: "#6366F1",
+    borderRadius: 12,
+    padding: 15,
     alignItems: "center",
+    marginTop: 8,
+    shadowColor: "#6366F1",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  buttonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
-  error: { color: "red", marginBottom: 12, textAlign: "center" },
-  link: { marginTop: 16, textAlign: "center", color: "#007AFF" },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  buttonText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 20,
+  },
+  footerText: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "500",
+  },
+  footerLink: {
+    fontSize: 14,
+    color: "#6366F1",
+    fontWeight: "700",
+  },
 });

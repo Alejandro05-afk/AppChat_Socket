@@ -7,11 +7,12 @@ export class SendMessageUseCase {
     async execute(
         roomId: string,
         userId: string,
-        content: string
+        content: string,
+        imageUrl?: string
     ): Promise<Message> {
         const trimmed = content.trim();
-        if(!trimmed) throw new ChatError("El mensaje no puede estar vacio");
+        if(!trimmed && !imageUrl) throw new ChatError("El mensaje no puede estar vacio");
         if(trimmed.length > 500) throw new ChatError("Maximo 500 caracteres");
-        return this.chatRepo.sendMessage(roomId, userId, trimmed);
+        return this.chatRepo.sendMessage(roomId, userId, trimmed, imageUrl);
     }
 }

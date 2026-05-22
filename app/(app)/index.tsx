@@ -11,13 +11,30 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 
+// Generador de colores dinámicos HSL basado en el nombre de la sala (¡Detalle de UI Premium!)
+const getRoomAvatarColor = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = Math.abs(hash % 360);
+  return `hsl(${h}, 65%, 55%)`;
+};
+
 export default function RoomsScreen() {
-  const { rooms, isLoading, createRoom, isCreating, createError } = useRooms();
+  const { rooms, isLoading, createRoom, isCreating, createError, getRoom } = useRooms();
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<"create" | "join">("create");
   const [roomName, setRoomName] = useState("");
+  const [roomIdInput, setRoomIdInput] = useState("");
+  const [joinLoading, setJoinLoading] = useState(false);
+  const [joinError, setJoinError] = useState("");
 
   const handleCreate = () => {
     if (!roomName.trim() || isCreating) return;
@@ -29,148 +46,297 @@ export default function RoomsScreen() {
     });
   };
 
-  const renderRoom = ({ item }: { item: Room }) => (
-    <TouchableOpacity
-      style={styles.roomItem}
-      onPress={() => router.push(`/chat/${item.id}`)}
-    >
-      <Text style={styles.roomName}># {item.name}</Text>
-      <Text style={styles.roomDate}>{item.createdAt.toLocaleDateString()}</Text>
-    </TouchableOpacity>
-  );
+  const handleJoin = async () => {
+    const trimmedId = roomIdInput.trim();
+    if (!trimmedId) return;
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(trimmedId)) {
+      setJoinError("El ID de la sala debe ser un formato UUID válido.");
+      return;
+    }
+
+    setJoinLoading(true);
+    setJoinError("");
+    try {
+      const room = await getRoom(trimmedId);
+      if (room) {
+        setRoomIdInput("");
+        setModalVisible(false);
+        router.push(`/chat/${room.id}`);
+      } else {
+        setJoinError("No se encontró ninguna sala con este ID.");
+      }
+    } catch (e) {
+      console.error("Error al buscar sala:", e);
+      setJoinError("Ocurrió un error al buscar la sala. Verifica tu conexión.");
+    } finally {
+      setJoinLoading(false);
+    }
+  };
+
+  const renderRoom = ({ item }: { item: Room }) => {
+    const avatarColor = getRoomAvatarColor(item.name);
+    const firstLetter = item.name.charAt(0).toUpperCase();
+
+    return (
+      <TouchableOpacity
+        style={styles.roomCard}
+        activeOpacity={0.85}
+        onPress={() => router.push(`/chat/${item.id}`)}
+      >
+        <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+          <Text style={styles.avatarText}>{firstLetter}</Text>
+        </View>
+        <View style={styles.roomInfo}>
+          <Text style={styles.roomName}># {item.name}</Text>
+          <Text style={styles.roomSubtitle}>Entra y comparte con la comunidad</Text>
+        </View>
+        <View style={styles.roomMeta}>
+          <Text style={styles.roomDate}>
+            {item.createdAt.toLocaleDateString([], { month: 'short', day: 'numeric' })}
+          </Text>
+          <Text style={styles.arrowIcon}>➔</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (isLoading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#4F46E5" />
+        <Text style={styles.loadingText}>Cargando salas...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      <View style={styles.header}>
+        <Text style={styles.headerSubtitle}>Canales activos</Text>
+        <Text style={styles.headerTitle}>Explorar Salas</Text>
+      </View>
+
       <FlatList
         data={rooms}
         keyExtractor={(r) => r.id}
         renderItem={renderRoom}
-        contentContainerStyle={rooms.length === 0 ? { flex: 1 } : undefined}
+        contentContainerStyle={rooms.length === 0 ? styles.listEmptyStyle : styles.listStyle}
         ListEmptyComponent={
-          <View style={styles.centered}>
-            <Text style={styles.empty}>No hay salas aún. ¡Crea una!</Text>
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>💬</Text>
+            <Text style={styles.empty}>No hay salas creadas aún.</Text>
+            <Text style={styles.emptySub}>Sé el primero en iniciar un canal activo para chatear.</Text>
+            <TouchableOpacity style={styles.emptyBtn} onPress={() => setModalVisible(true)}>
+              <Text style={styles.emptyBtnText}>Crear primera sala</Text>
+            </TouchableOpacity>
           </View>
         }
       />
 
-      <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
+      <TouchableOpacity
+        style={styles.fab}
+        activeOpacity={0.9}
+        onPress={() => setModalVisible(true)}
+      >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
 
       <Modal
         visible={modalVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.overlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            onPress={() => setModalVisible(false)}
-          />
-          <View style={styles.dialog}>
-            <Text style={styles.dialogTitle}>Nueva sala</Text>
-            {createError && <Text style={styles.dialogError}>{createError}</Text>}
-            <TextInput
-              style={styles.dialogInput}
-              placeholder="Nombre de la sala"
-              value={roomName}
-              onChangeText={setRoomName}
-              autoFocus
-              maxLength={50}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.overlay}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => setModalVisible(false)}
             />
-            <View style={styles.dialogActions}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.cancelText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.createBtn, isCreating && { opacity: 0.6 }]}
-                onPress={handleCreate}
-                disabled={isCreating}
-              >
-                {isCreating ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.createText}>Crear</Text>
-                )}
-              </TouchableOpacity>
+            <View style={styles.dialog}>
+              <View style={styles.dialogHeader}>
+                <Text style={styles.dialogTitle}>Crear Nueva Sala</Text>
+                <Text style={styles.dialogSubtitle}>Escribe el nombre de la sala que deseas iniciar</Text>
+              </View>
+
+              {createError && <Text style={styles.dialogError}>{createError}</Text>}
+              
+              <TextInput
+                style={styles.dialogInput}
+                placeholder="Ej. Desarrolladores Mobile"
+                placeholderTextColor="#9CA3AF"
+                value={roomName}
+                onChangeText={setRoomName}
+                autoFocus
+                maxLength={30}
+              />
+
+              <View style={styles.dialogActions}>
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  onPress={() => setModalVisible(false)}
+                >
+                  <Text style={styles.cancelText}>Cancelar</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.createBtn, isCreating && { opacity: 0.6 }]}
+                  onPress={handleCreate}
+                  disabled={isCreating}
+                >
+                  {isCreating ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.createText}>Crear sala</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f5f5f5" },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
-  empty: { color: "#999", fontSize: 16 },
-  roomItem: {
-    backgroundColor: "#fff",
-    padding: 16,
+  container: { flex: 1, backgroundColor: "#F9FAFB" },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F9FAFB" },
+  loadingText: { marginTop: 12, fontSize: 15, color: "#6B7280", fontWeight: "500" },
+  header: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 16,
+    backgroundColor: "#FFF",
     borderBottomWidth: 1,
-    borderColor: "#e0e0e0",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    borderColor: "#F3F4F6",
   },
-  roomName: { fontSize: 16, fontWeight: "600" },
-  roomDate: { fontSize: 12, color: "#999" },
-  fab: {
-    position: "absolute",
-    right: 20,
-    bottom: 28,
-    backgroundColor: "#007AFF",
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: "center",
+  headerSubtitle: { fontSize: 12, fontWeight: "600", color: "#6366F1", textTransform: "uppercase", letterSpacing: 1 },
+  headerTitle: { fontSize: 26, fontWeight: "800", color: "#111827", marginTop: 4 },
+  listStyle: { padding: 16, paddingBottom: 100 },
+  listEmptyStyle: { flex: 1, justifyContent: "center", padding: 24 },
+  roomCard: {
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: "row",
     alignItems: "center",
-    elevation: 4,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
   },
-  fabText: { color: "#fff", fontSize: 28, lineHeight: 32 },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarText: { color: "#FFF", fontSize: 18, fontWeight: "700" },
+  roomInfo: { flex: 1, marginLeft: 16 },
+  roomName: { fontSize: 16, fontWeight: "700", color: "#1F2937" },
+  roomSubtitle: { fontSize: 13, color: "#6B7280", marginTop: 2 },
+  roomMeta: { alignItems: "flex-end", justifyContent: "space-between", height: 42 },
+  roomDate: { fontSize: 12, fontWeight: "500", color: "#9CA3AF" },
+  arrowIcon: { fontSize: 12, color: "#6366F1", marginTop: 4, fontWeight: "700" },
+  fab: {
+    position: "absolute",
+    right: 24,
+    bottom: 24,
+    backgroundColor: "#6366F1",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#6366F1",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  fabText: { color: "#FFF", fontSize: 32, fontWeight: "300" },
+  emptyContainer: { alignItems: "center", paddingHorizontal: 16 },
+  emptyIcon: { fontSize: 48, marginBottom: 12 },
+  empty: { fontSize: 18, fontWeight: "700", color: "#1F2937" },
+  emptySub: { fontSize: 14, color: "#6B7280", textAlign: "center", marginTop: 6, marginBottom: 20 },
+  emptyBtn: {
+    backgroundColor: "#6366F1",
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    shadowColor: "#6366F1",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  emptyBtnText: { color: "#FFF", fontWeight: "600", fontSize: 15 },
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
+    backgroundColor: "rgba(17, 24, 39, 0.6)",
+    justifyContent: "flex-end",
+  },
+  dialog: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 24,
+    paddingBottom: 40,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 20,
   },
-  dialog: { backgroundColor: "#fff", borderRadius: 12, padding: 20 },
-  dialogTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 12 },
-  dialogError: { color: "red", fontSize: 13, marginBottom: 8 },
+  dialogHeader: { marginBottom: 20 },
+  dialogTitle: { fontSize: 20, fontWeight: "800", color: "#111827" },
+  dialogSubtitle: { fontSize: 14, color: "#6B7280", marginTop: 4 },
+  dialogError: { color: "#EF4444", fontSize: 13, marginBottom: 12, fontWeight: "500" },
   dialogInput: {
+    backgroundColor: "#F9FAFB",
     borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 16,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    color: "#1F2937",
+    marginBottom: 24,
   },
-  dialogActions: { flexDirection: "row", justifyContent: "flex-end", gap: 10 },
-  cancelBtn: { padding: 10 },
-  cancelText: { color: "#666", fontSize: 15 },
+  dialogActions: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 12,
+    padding: 14,
+    alignItems: "center",
+  },
+  cancelText: { color: "#4B5563", fontSize: 15, fontWeight: "600" },
   createBtn: {
-    backgroundColor: "#007AFF",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    flex: 1,
+    backgroundColor: "#6366F1",
+    borderRadius: 12,
+    padding: 14,
+    alignItems: "center",
+    shadowColor: "#6366F1",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  createText: { color: "#fff", fontWeight: "600", fontSize: 15 },
+  createText: { color: "#FFF", fontWeight: "600", fontSize: 15 },
 });
 
 

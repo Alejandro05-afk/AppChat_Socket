@@ -5,6 +5,7 @@ export interface Message {
     content: string;
     createdAt: Date;
     authorUsername?: string;
+    imageUrl?: string;
 }
 
 export interface Room {

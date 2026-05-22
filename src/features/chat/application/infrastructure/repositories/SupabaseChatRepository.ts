@@ -51,26 +51,31 @@ export class SupabaseChatRepository implements IChatRepository {
   }
 
   async uploadImage(uri: string): Promise<string> {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const fileExt = uri.split('.').pop() || 'jpg';
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const filePath = `${fileName}`;
+  const fileExt = uri.split('.').pop()?.split('?')[0] || 'jpg';
+  const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-    const { data, error } = await supabase.storage
-      .from('chat-images')
-      .upload(filePath, blob, {
-        contentType: blob.type || `image/${fileExt}`,
-      });
+  // ✅ FormData lee correctamente los file:// URIs de React Native
+  const formData = new FormData();
+  formData.append('file', {
+    uri,
+    name: fileName,
+    type: `image/${fileExt}`,
+  } as any);
 
-    if (error) throw error;
+  const { data, error } = await supabase.storage
+    .from('chat-images')
+    .upload(fileName, formData, {
+      contentType: `image/${fileExt}`,
+    });
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('chat-images')
-      .getPublicUrl(filePath);
+  if (error) throw error;
 
-    return publicUrl;
-  }
+  const { data: { publicUrl } } = supabase.storage
+    .from('chat-images')
+    .getPublicUrl(fileName);
+
+  return publicUrl;
+}
 
   async getRecipientTokens(currentUserId: string): Promise<string[]> {
     const { data, error } = await supabase
@@ -84,32 +89,27 @@ export class SupabaseChatRepository implements IChatRepository {
   }
  
   subscribeToRoom(roomId: string, onMessage: (msg: Message) => void): () => void {
-    const channel = supabase
-      .channel(`room:${roomId}`)
-      .on('postgres_changes', {
-          event: 'INSERT', schema: 'public',
-          table: 'messages', filter: `room_id=eq.${roomId}`,
-        },
-        async (payload) => {
-          // El payload no incluye el username — se obtiene con una query extra
-          const { data: profile } = await supabase
-            .from('profiles').select('username')
-            .eq('id', payload.new.user_id).single();
-          onMessage({
-            id:             payload.new.id,
-            roomId:         payload.new.room_id,
-            userId:         payload.new.user_id,
-            content:        payload.new.content,
-            imageUrl:       payload.new.image_url,
-            createdAt:      new Date(payload.new.created_at),
-            authorUsername: profile?.username,
-          });
-        }
-      ).subscribe();
- 
-    return () => { supabase.removeChannel(channel); };
-  }
- 
+  const channel = supabase
+    .channel(`room:${roomId}`)
+    .on('postgres_changes', {
+        event: 'INSERT', schema: 'public',
+        table: 'messages', filter: `room_id=eq.${roomId}`,
+      },
+      async (payload) => {
+        // ✅ Fetch completo para garantizar image_url y username
+        const { data } = await supabase
+          .from('messages')
+          .select('id, room_id, user_id, content, image_url, created_at, profiles(username)')
+          .eq('id', payload.new.id)
+          .single();
+
+        if (!data) return;
+        onMessage(this.mapMessage(data));
+      }
+    ).subscribe();
+
+  return () => { supabase.removeChannel(channel); };
+}
   private mapRoom = (raw: any): Room => ({
     id: raw.id, name: raw.name,
     createdBy: raw.created_by, createdAt: new Date(raw.created_at),

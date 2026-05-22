@@ -1,5 +1,5 @@
-import { Room } from "@features/chat/application/domain/entities/Message"; 
-import { useRooms } from "@features/chat/application/presentation/hooks/useRooms"; 
+import { Room } from "@features/chat/application/domain/entities/Message";
+import { useRooms } from "@features/chat/application/presentation/hooks/useRooms";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -16,7 +16,6 @@ import {
   Platform,
 } from "react-native";
 
-// Generador de colores dinámicos HSL basado en el nombre de la sala (¡Detalle de UI Premium!)
 const getRoomAvatarColor = (name: string) => {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
@@ -36,12 +35,19 @@ export default function RoomsScreen() {
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState("");
 
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setRoomName("");
+    setRoomIdInput("");
+    setJoinError("");
+    setActiveTab("create");
+  };
+
   const handleCreate = () => {
     if (!roomName.trim() || isCreating) return;
     createRoom(roomName.trim(), {
       onSuccess: () => {
-        setRoomName("");
-        setModalVisible(false);
+        handleCloseModal();
       },
     });
   };
@@ -61,8 +67,7 @@ export default function RoomsScreen() {
     try {
       const room = await getRoom(trimmedId);
       if (room) {
-        setRoomIdInput("");
-        setModalVisible(false);
+        handleCloseModal();
         router.push(`/chat/${room.id}`);
       } else {
         setJoinError("No se encontró ninguna sala con este ID.");
@@ -94,7 +99,7 @@ export default function RoomsScreen() {
         </View>
         <View style={styles.roomMeta}>
           <Text style={styles.roomDate}>
-            {item.createdAt.toLocaleDateString([], { month: 'short', day: 'numeric' })}
+            {item.createdAt.toLocaleDateString([], { month: "short", day: "numeric" })}
           </Text>
           <Text style={styles.arrowIcon}>➔</Text>
         </View>
@@ -148,7 +153,7 @@ export default function RoomsScreen() {
         visible={modalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={handleCloseModal}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -158,46 +163,113 @@ export default function RoomsScreen() {
             <TouchableOpacity
               style={StyleSheet.absoluteFill}
               activeOpacity={1}
-              onPress={() => setModalVisible(false)}
+              onPress={handleCloseModal}
             />
             <View style={styles.dialog}>
-              <View style={styles.dialogHeader}>
-                <Text style={styles.dialogTitle}>Crear Nueva Sala</Text>
-                <Text style={styles.dialogSubtitle}>Escribe el nombre de la sala que deseas iniciar</Text>
-              </View>
 
-              {createError && <Text style={styles.dialogError}>{createError}</Text>}
-              
-              <TextInput
-                style={styles.dialogInput}
-                placeholder="Ej. Desarrolladores Mobile"
-                placeholderTextColor="#9CA3AF"
-                value={roomName}
-                onChangeText={setRoomName}
-                autoFocus
-                maxLength={30}
-              />
-
-              <View style={styles.dialogActions}>
+              {/* Tabs */}
+              <View style={styles.tabs}>
                 <TouchableOpacity
-                  style={styles.cancelBtn}
-                  onPress={() => setModalVisible(false)}
+                  style={[styles.tab, activeTab === "create" && styles.tabActive]}
+                  onPress={() => setActiveTab("create")}
                 >
-                  <Text style={styles.cancelText}>Cancelar</Text>
+                  <Text style={[styles.tabText, activeTab === "create" && styles.tabTextActive]}>
+                    Crear sala
+                  </Text>
                 </TouchableOpacity>
-                
                 <TouchableOpacity
-                  style={[styles.createBtn, isCreating && { opacity: 0.6 }]}
-                  onPress={handleCreate}
-                  disabled={isCreating}
+                  style={[styles.tab, activeTab === "join" && styles.tabActive]}
+                  onPress={() => setActiveTab("join")}
                 >
-                  {isCreating ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.createText}>Crear sala</Text>
-                  )}
+                  <Text style={[styles.tabText, activeTab === "join" && styles.tabTextActive]}>
+                    Unirse por ID
+                  </Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Tab: Crear */}
+              {activeTab === "create" ? (
+                <>
+                  <View style={styles.dialogHeader}>
+                    <Text style={styles.dialogTitle}>Crear Nueva Sala</Text>
+                    <Text style={styles.dialogSubtitle}>
+                      Escribe el nombre de la sala que deseas iniciar
+                    </Text>
+                  </View>
+
+                  {createError && <Text style={styles.dialogError}>{createError}</Text>}
+
+                  <TextInput
+                    style={styles.dialogInput}
+                    placeholder="Ej. Desarrolladores Mobile"
+                    placeholderTextColor="#9CA3AF"
+                    value={roomName}
+                    onChangeText={setRoomName}
+                    autoFocus
+                    maxLength={30}
+                  />
+
+                  <View style={styles.dialogActions}>
+                    <TouchableOpacity style={styles.cancelBtn} onPress={handleCloseModal}>
+                      <Text style={styles.cancelText}>Cancelar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.createBtn, isCreating && { opacity: 0.6 }]}
+                      onPress={handleCreate}
+                      disabled={isCreating}
+                    >
+                      {isCreating ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Text style={styles.createText}>Crear sala</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                /* Tab: Unirse */
+                <>
+                  <View style={styles.dialogHeader}>
+                    <Text style={styles.dialogTitle}>Unirse a una Sala</Text>
+                    <Text style={styles.dialogSubtitle}>
+                      Pega el ID de la sala a la que quieres entrar
+                    </Text>
+                  </View>
+
+                  {joinError ? <Text style={styles.dialogError}>{joinError}</Text> : null}
+
+                  <TextInput
+                    style={styles.dialogInput}
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    placeholderTextColor="#9CA3AF"
+                    value={roomIdInput}
+                    onChangeText={(text) => {
+                      setRoomIdInput(text);
+                      setJoinError("");
+                    }}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoFocus
+                  />
+
+                  <View style={styles.dialogActions}>
+                    <TouchableOpacity style={styles.cancelBtn} onPress={handleCloseModal}>
+                      <Text style={styles.cancelText}>Cancelar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.createBtn, joinLoading && { opacity: 0.6 }]}
+                      onPress={handleJoin}
+                      disabled={joinLoading}
+                    >
+                      {joinLoading ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Text style={styles.createText}>Unirse</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -218,7 +290,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: "#F3F4F6",
   },
-  headerSubtitle: { fontSize: 12, fontWeight: "600", color: "#6366F1", textTransform: "uppercase", letterSpacing: 1 },
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6366F1",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
   headerTitle: { fontSize: 26, fontWeight: "800", color: "#111827", marginTop: 4 },
   listStyle: { padding: 16, paddingBottom: 100 },
   listEmptyStyle: { flex: 1, justifyContent: "center", padding: 24 },
@@ -271,7 +349,13 @@ const styles = StyleSheet.create({
   emptyContainer: { alignItems: "center", paddingHorizontal: 16 },
   emptyIcon: { fontSize: 48, marginBottom: 12 },
   empty: { fontSize: 18, fontWeight: "700", color: "#1F2937" },
-  emptySub: { fontSize: 14, color: "#6B7280", textAlign: "center", marginTop: 6, marginBottom: 20 },
+  emptySub: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    marginTop: 6,
+    marginBottom: 20,
+  },
   emptyBtn: {
     backgroundColor: "#6366F1",
     borderRadius: 12,
@@ -301,6 +385,31 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 20,
   },
+  // Tabs
+  tabs: {
+    flexDirection: "row",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  tabActive: {
+    backgroundColor: "#FFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tabText: { fontSize: 14, fontWeight: "600", color: "#9CA3AF" },
+  tabTextActive: { color: "#6366F1" },
+  // Dialog content
   dialogHeader: { marginBottom: 20 },
   dialogTitle: { fontSize: 20, fontWeight: "800", color: "#111827" },
   dialogSubtitle: { fontSize: 14, color: "#6B7280", marginTop: 4 },
@@ -338,5 +447,3 @@ const styles = StyleSheet.create({
   },
   createText: { color: "#FFF", fontWeight: "600", fontSize: 15 },
 });
-
-

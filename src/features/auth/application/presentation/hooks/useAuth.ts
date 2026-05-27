@@ -5,7 +5,7 @@ import { RegisterUseCase } from "../../use-cases/RegisterUsecase";
 import { SupabaseAuthRepository } from "../../infrastructure/repositories/SupabaseAuthRepository";
 import { useAuthStore } from "../store/authStore"; 
 
-type RegisterDto = { email: string; password: string; username: string };
+type RegisterDto = { email: string; password: string; username: string; role?: 'seller' | 'client' };
 
 const authRepo = new SupabaseAuthRepository();
 const loginUseCase = new LoginUseCase(authRepo);
@@ -21,16 +21,16 @@ export function useAuth() {
       loginUseCase.execute(email, password),
     onSuccess: (user) => {
       setUser(user);
-      router.replace("/(app)");
+      router.replace(user.role === 'seller' ? '/(seller)' : '/(client)');
     },
   });
 
   const registerMutation = useMutation({
-    mutationFn: ({ email, password, username }: RegisterDto) =>
-      registerUseCase.execute(email, password, username),
+    mutationFn: ({ email, password, username, role }: RegisterDto) =>
+      registerUseCase.execute(email, password, username, role),
     onSuccess: (user) => {
       setUser(user);
-      router.replace("/(app)");
+      router.replace(user.role === 'seller' ? '/(seller)' : '/(client)');
     },
   });
 

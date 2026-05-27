@@ -2,6 +2,7 @@ import "./silenceWarning";
 import { useAuthStore } from "@features/auth/application/presentation/store/authStore";
 import { SupabaseAuthRepository } from "@features/auth/application/infrastructure/repositories/SupabaseAuthRepository";
 import { supabase } from "@shared/infrastructure/supabase/client";
+import { useGlobalNotifications } from "@shared/presentation/hooks/useGlobalNotifications";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useEffect, useState } from "react";
@@ -29,12 +30,6 @@ Notifications.setNotificationHandler({
 });
 
 async function registerForPushNotificationsAsync() {
-  if (Constants.appOwnership === "expo") {
-    console.log("Ejecutando en Expo Go. Notificaciones remotas no disponibles en Android (SDK 53+). Usando notificaciones locales para demostración.");
-    return null;
-  }
-
-  let token;
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("default", {
       name: "default",
@@ -51,19 +46,23 @@ async function registerForPushNotificationsAsync() {
     finalStatus = status;
   }
   if (finalStatus !== "granted") {
-    console.warn("¡Permiso de notificaciones push denegado!");
-    return;
+    console.warn("Permiso de notificaciones denegado");
+    return null;
+  }
+
+  if (Constants.appOwnership === "expo") {
+    console.log("Expo Go: notificaciones locales configuradas.");
+    return null;
   }
 
   try {
-    // Si estás usando Expo Go local sin EAS configurado, extra.eas.projectId podría ser undefined,
-    // pero intentará obtener el token push de Expo por defecto.
     const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
-    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    return token;
   } catch (e) {
     console.log("Error al obtener token push de Expo:", e);
+    return null;
   }
-  return token;
 }
 
 function AuthGuard() {
@@ -72,9 +71,22 @@ function AuthGuard() {
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
 
+  useGlobalNotifications();
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Navegar a la sala correcta cuando el usuario toca una notificación push
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const roomId = response.notification.request.content.data?.roomId as string | undefined;
+      if (roomId && user) {
+        router.push(`/chat/${roomId}`);
+      }
+    });
+    return () => sub.remove();
+  }, [user?.id]);
 
   useEffect(() => {
     // Restaurar sesión desde AsyncStorage al iniciar la app
@@ -96,6 +108,12 @@ function AuthGuard() {
 
   useEffect(() => {
     if (user) {
+      Notifications.requestPermissionsAsync().then(({ status }) => {
+        if (status !== "granted") {
+          console.warn("Permiso de notificaciones denegado");
+        }
+      });
+
       registerForPushNotificationsAsync().then(async (token) => {
         if (token) {
           await supabase
@@ -106,13 +124,29 @@ function AuthGuard() {
         }
       });
     }
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!isMounted) return;
-    const inAuth = segments[0] === "(auth)";
-    if (!user && !inAuth) router.replace("/(auth)/login");
-    if (user && inAuth) router.replace("/(app)");
+    const inAuth   = segments[0] === "(auth)";
+    const inSeller = segments[0] === "(seller)";
+    const inClient = segments[0] === "(client)";
+
+    if (!user && !inAuth) {
+      router.replace("/(auth)/login");
+      return;
+    }
+    if (user && inAuth) {
+      router.replace(user.role === 'seller' ? '/(seller)' : '/(client)');
+      return;
+    }
+    if (user?.role === 'seller' && inClient) {
+      router.replace("/(seller)");
+      return;
+    }
+    if (user?.role === 'client' && inSeller) {
+      router.replace("/(client)");
+    }
   }, [user, segments, isMounted]);
 
   return <Slot />;

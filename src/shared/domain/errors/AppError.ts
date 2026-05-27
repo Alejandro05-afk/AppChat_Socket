@@ -20,3 +20,9 @@ export class ChatError extends AppError{
         super('CHAT_ERROR', message, cause);
     }
 }
+
+export class MarketplaceError extends AppError{
+    constructor(message: string, cause?: unknown){
+        super('MARKETPLACE_ERROR', message, cause);
+    }
+}

@@ -18,6 +18,7 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
+  const [role, setRole] = useState<'seller' | 'client'>('client');
   const [isUsernameFocused, setIsUsernameFocused] = useState(false);
   const [isEmailFocused, setIsEmailFocused] = useState(false);
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
@@ -106,10 +107,29 @@ export default function RegisterScreen() {
               />
             </View>
 
+            {/* Role Selector */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Tipo de cuenta</Text>
+              <View style={styles.roleRow}>
+                {(['client', 'seller'] as const).map((r) => (
+                  <TouchableOpacity
+                    key={r}
+                    style={[styles.roleBtn, role === r && styles.roleBtnActive]}
+                    onPress={() => setRole(r)}
+                  >
+                    <Text style={styles.roleIcon}>{r === 'client' ? '🛍️' : '🏪'}</Text>
+                    <Text style={[styles.roleText, role === r && styles.roleTextActive]}>
+                      {r === 'client' ? 'Cliente' : 'Vendedor'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
             {/* Submit Button */}
             <TouchableOpacity
               style={[styles.button, isLoading && styles.buttonDisabled]}
-              onPress={() => register({ email, password, username })}
+              onPress={() => register({ email, password, username, role })}
               disabled={isLoading}
               activeOpacity={0.85}
             >
@@ -285,4 +305,14 @@ const styles = StyleSheet.create({
     color: "#6366F1",
     fontWeight: "700",
   },
+  roleRow: { flexDirection: 'row', gap: 12 },
+  roleBtn: {
+    flex: 1, borderRadius: 12, borderWidth: 1.5,
+    borderColor: '#E5E7EB', padding: 14,
+    alignItems: 'center', backgroundColor: '#F9FAFB',
+  },
+  roleBtnActive: { borderColor: '#6366F1', backgroundColor: '#EEF2FF' },
+  roleIcon: { fontSize: 24, marginBottom: 4 },
+  roleText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
+  roleTextActive: { color: '#4F46E5' },
 });

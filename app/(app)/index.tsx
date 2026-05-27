@@ -1,5 +1,6 @@
 import { Room } from "@features/chat/application/domain/entities/Message";
 import { useRooms } from "@features/chat/application/presentation/hooks/useRooms";
+import { useUnreadStore } from "@shared/presentation/store/unreadStore";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -27,6 +28,7 @@ const getRoomAvatarColor = (name: string) => {
 
 export default function RoomsScreen() {
   const { rooms, isLoading, createRoom, isCreating, createError, getRoom } = useRooms();
+  const unreadCounts = useUnreadStore((s) => s.counts);
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<"create" | "join">("create");
@@ -83,6 +85,7 @@ export default function RoomsScreen() {
   const renderRoom = ({ item }: { item: Room }) => {
     const avatarColor = getRoomAvatarColor(item.name);
     const firstLetter = item.name.charAt(0).toUpperCase();
+    const unread = unreadCounts[item.id] ?? 0;
 
     return (
       <TouchableOpacity
@@ -90,8 +93,15 @@ export default function RoomsScreen() {
         activeOpacity={0.85}
         onPress={() => router.push(`/chat/${item.id}`)}
       >
-        <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
-          <Text style={styles.avatarText}>{firstLetter}</Text>
+        <View style={styles.avatarContainer}>
+          <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+            <Text style={styles.avatarText}>{firstLetter}</Text>
+          </View>
+          {unread > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unread > 99 ? '99+' : unread}</Text>
+            </View>
+          )}
         </View>
         <View style={styles.roomInfo}>
           <Text style={styles.roomName}># {item.name}</Text>
@@ -315,6 +325,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#F3F4F6",
   },
+  avatarContainer: {
+    position: "relative",
+  },
   avatar: {
     width: 48,
     height: 48,
@@ -323,6 +336,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   avatarText: { color: "#FFF", fontSize: 18, fontWeight: "700" },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: "#EF4444",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 5,
+  },
+  badgeText: {
+    color: "#FFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
   roomInfo: { flex: 1, marginLeft: 16 },
   roomName: { fontSize: 16, fontWeight: "700", color: "#1F2937" },
   roomSubtitle: { fontSize: 13, color: "#6B7280", marginTop: 2 },

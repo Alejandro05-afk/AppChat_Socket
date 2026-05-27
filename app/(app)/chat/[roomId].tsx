@@ -1,7 +1,9 @@
 import { useAuthStore } from "@features/auth/application/presentation/store/authStore"; 
 import { Message } from "@features/chat/application/domain/entities/Message";
 import { useChat } from "@features/chat/application/presentation/hooks/useChat"; 
-import { useLocalSearchParams } from "expo-router";
+import { useUnreadStore } from "@shared/presentation/store/unreadStore";
+import { useLocalSearchParams, useFocusEffect } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FlatList,
@@ -14,6 +16,7 @@ import {
   View,
   ActivityIndicator,
   StatusBar,
+  Alert,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
@@ -22,6 +25,7 @@ export default function ChatScreen() {
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
   const { messages, sendMessage, uploadImage, isLoading, isSending } = useChat(roomId);
   const user = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
   const [input, setInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const listRef = useRef<FlatList>(null);
@@ -34,76 +38,75 @@ export default function ChatScreen() {
     }
   }, [messages.length]);
 
+  useFocusEffect(
+    useCallback(() => {
+      useUnreadStore.getState().clear(roomId);
+      queryClient.invalidateQueries({ queryKey: ["messages", roomId] });
+    }, [roomId])
+  );
+
   const handleSend = useCallback(async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isSending) return;
     sendMessage(input.trim());
     setInput("");
-  }, [input, sendMessage]);
+  }, [input, sendMessage, isSending]);
 
   const handlePickImage = async () => {
-    // Solicitar permisos de galería si es necesario
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      alert("Se requiere permiso para acceder a la galería para compartir fotos.");
+      Alert.alert("Permiso requerido", "Se requiere permiso para acceder a la galería para compartir fotos.");
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
+      mediaTypes: ['images'],
       allowsEditing: true,
-      quality: 0.8,
+      quality: 0.4,
     });
 
     if (!result.canceled && result.assets[0]?.uri) {
       setIsUploading(true);
       try {
         const localUri = result.assets[0].uri;
-        // Subir imagen a Supabase Storage
         const publicUrl = await uploadImage(localUri);
-        // Enviar mensaje con la imagen adjuntada
         sendMessage("", publicUrl);
       } catch (e) {
         console.error("Error al compartir imagen:", e);
-        alert("Ocurrió un error al subir la foto. Inténtalo de nuevo.");
+        Alert.alert("Error", "Ocurrió un error al subir la foto. Inténtalo de nuevo.");
       } finally {
         setIsUploading(false);
       }
     }
   };
 
-  const renderMsg = ({ item }: { item: Message }) => {
-    const isOwn = item.userId === user?.id;
-    const hasImage = !!item.imageUrl;
+  const renderMessage = ({ item }: { item: Message }) => {
+    const isMe = item.userId === user?.id;
 
     return (
-      <View style={[styles.row, isOwn ? styles.rowOwn : styles.rowOther]}>
-        <View style={[
-          styles.bubble,
-          isOwn ? styles.own : styles.other,
-          hasImage && styles.imageBubble
-        ]}>
-          {!isOwn && <Text style={styles.author}>@{item.authorUsername}</Text>}
+      <View style={[styles.messageRow, isMe ? styles.myRow : styles.theirRow]}>
+        {!isMe && (
+          <View style={styles.senderAvatar}>
+            <Text style={styles.avatarText}>
+              {item.authorUsername?.charAt(0).toUpperCase() || "?"}
+            </Text>
+          </View>
+        )}
+        <View style={[styles.bubble, isMe ? styles.myBubble : styles.theirBubble]}>
+          {!isMe && <Text style={styles.senderName}>{item.authorUsername}</Text>}
           
-          {hasImage && (
-            <Image
-              source={{ uri: item.imageUrl }}
-              style={styles.attachedImage}
+          {item.imageUrl ? (
+            <Image 
+              source={{ uri: item.imageUrl }} 
+              style={styles.messageImage}
               contentFit="cover"
               transition={200}
             />
-          )}
-
-          {item.content ? (
-            <Text style={[styles.text, isOwn ? styles.textOwn : styles.textOther, hasImage && { marginTop: 6 }]}>
-              {item.content}
-            </Text>
           ) : null}
 
-          <Text style={[styles.time, isOwn ? styles.timeOwn : styles.timeOther]}>
-            {item.createdAt.toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+          {item.content ? <Text style={[styles.messageText, isMe ? styles.myText : styles.theirText]}>{item.content}</Text> : null}
+          
+          <Text style={[styles.timestamp, isMe ? styles.myTimestamp : styles.theirTimestamp]}>
+            {item.createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </Text>
         </View>
       </View>
@@ -113,8 +116,8 @@ export default function ChatScreen() {
   if (isLoading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366F1" />
-        <Text style={styles.loadingText}>Conectando con la sala...</Text>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Cargando mensajes...</Text>
       </View>
     );
   }
@@ -122,57 +125,52 @@ export default function ChatScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 88}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
     >
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" />
+      
       <FlatList
         ref={listRef}
         data={messages}
-        keyExtractor={(m) => m.id}
-        renderItem={renderMsg}
+        keyExtractor={(item) => item.id}
+        renderItem={renderMessage}
         contentContainerStyle={styles.messagesList}
-        showsVerticalScrollIndicator={false}
+        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
       />
-
-      {isUploading && (
-        <View style={styles.uploadingOverlay}>
-          <ActivityIndicator size="small" color="#6366F1" />
-          <Text style={styles.uploadingText}>Subiendo imagen premium...</Text>
-        </View>
-      )}
 
       <View style={styles.inputContainer}>
         <TouchableOpacity 
-          style={styles.attachBtn} 
+          style={styles.attachButton} 
           onPress={handlePickImage}
-          disabled={isUploading}
-          activeOpacity={0.7}
+          disabled={isUploading || isSending}
         >
-          <Text style={styles.attachIcon}>📷</Text>
+          {isUploading ? (
+            <ActivityIndicator size="small" color="#007AFF" />
+          ) : (
+            <Text style={styles.attachIcon}>+</Text>
+          )}
         </TouchableOpacity>
-        
+
         <TextInput
           style={styles.input}
-          value={input}
-          onChangeText={setInput}
           placeholder="Escribe un mensaje..."
           placeholderTextColor="#9CA3AF"
+          value={input}
+          onChangeText={setInput}
           multiline
           maxLength={500}
-          editable={!isUploading}
         />
-        
+
         <TouchableOpacity 
-          style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]} 
+          style={[styles.sendButton, !input.trim() && styles.disabledSend]} 
           onPress={handleSend}
-          disabled={!input.trim() || isUploading || isSending}
-          activeOpacity={0.8}
+          disabled={!input.trim() || isSending}
         >
           {isSending ? (
-            <ActivityIndicator color="#FFF" size="small" />
+            <ActivityIndicator size="small" color="#FFF" />
           ) : (
-            <Text style={styles.sendIcon}>➤</Text>
+            <Text style={styles.sendIcon}>➔</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -183,119 +181,62 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F3F4F6" },
   centered: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F3F4F6" },
-  loadingText: { marginTop: 12, fontSize: 15, color: "#6B7280", fontWeight: "500" },
-  messagesList: { paddingHorizontal: 16, paddingVertical: 20, paddingBottom: 30 },
-  row: { flexDirection: "row", marginVertical: 6 },
-  rowOwn: { justifyContent: "flex-end" },
-  rowOther: { justifyContent: "flex-start" },
-  bubble: {
-    maxWidth: "78%",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  own: {
-    backgroundColor: "#6366F1",
-    borderBottomRightRadius: 4,
-  },
-  other: {
-    backgroundColor: "#FFF",
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  imageBubble: {
-    padding: 6,
+  loadingText: { marginTop: 8, color: "#6B7280", fontSize: 14, fontWeight: "500" },
+  messagesList: { padding: 16, paddingBottom: 24 },
+  messageRow: { flexDirection: "row", marginBottom: 12, maxWidth: "80%" },
+  myRow: { alignSelf: "flex-end" },
+  theirRow: { alignSelf: "flex-start" },
+  senderAvatar: {
+    width: 32,
+    height: 32,
     borderRadius: 16,
-  },
-  attachedImage: {
-    width: 230,
-    height: 170,
-    borderRadius: 12,
-    backgroundColor: "#E5E7EB",
-  },
-  author: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#4F46E5",
-    marginBottom: 4,
-  },
-  text: { fontSize: 15, lineHeight: 20 },
-  textOwn: { color: "#FFF" },
-  textOther: { color: "#1F2937" },
-  time: {
-    fontSize: 10,
-    marginTop: 4,
+    backgroundColor: "#9CA3AF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
     alignSelf: "flex-end",
   },
-  timeOwn: { color: "rgba(255, 255, 255, 0.7)" },
-  timeOther: { color: "#9CA3AF" },
-  
-  uploadingOverlay: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFF",
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: 8,
-  },
-  uploadingText: { fontSize: 13, color: "#4B5563", fontWeight: "600" },
-
+  avatarText: { color: "#FFF", fontSize: 12, fontWeight: "bold" },
+  bubble: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  myBubble: { backgroundColor: "#007AFF", borderBottomRightRadius: 4 },
+  theirBubble: { backgroundColor: "#FFF", borderBottomLeftRadius: 4 },
+  senderName: { fontSize: 11, fontWeight: "600", color: "#4F46E5", marginBottom: 2 },
+  messageText: { fontSize: 16, lineHeight: 20 },
+  myText: { color: "#FFF" },
+  theirText: { color: "#1F2937" },
+  messageImage: { width: 220, height: 160, borderRadius: 14, marginBottom: 4, backgroundColor: "#E5E7EB" },
+  timestamp: { fontSize: 10, alignSelf: "flex-end", marginTop: 4 },
+  myTimestamp: { color: "rgba(255, 255, 255, 0.7)" },
+  theirTimestamp: { color: "#9CA3AF" },
   inputContainer: {
     flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    padding: 12,
     backgroundColor: "#FFF",
-    borderTopWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: 8,
-  },
-  attachBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#F3F4F6",
-    justifyContent: "center",
     alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
   },
-  attachIcon: { fontSize: 18 },
+  attachButton: { width: 40, height: 40, justifyContent: "center", alignItems: "center" },
+  attachIcon: { fontSize: 22, color: "#007AFF" },
   input: {
     flex: 1,
     backgroundColor: "#F3F4F6",
-    borderRadius: 22,
+    borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: "#1F2937",
+    paddingVertical: 8,
+    marginHorizontal: 8,
+    fontSize: 16,
     maxHeight: 100,
+    color: "#1F2937",
   },
-  sendBtn: {
-    backgroundColor: "#6366F1",
-    borderRadius: 22,
-    width: 44,
-    height: 44,
+  sendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#007AFF",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#6366F1",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
   },
-  sendBtnDisabled: {
-    backgroundColor: "#E5E7EB",
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  sendIcon: { color: "#FFF", fontSize: 18, marginLeft: 2 },
+  disabledSend: { backgroundColor: "#E5E7EB" },
+  sendIcon: { color: "#FFF", fontSize: 18, fontWeight: "bold" },
 });
-
-

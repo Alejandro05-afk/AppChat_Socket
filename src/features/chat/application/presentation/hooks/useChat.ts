@@ -6,7 +6,6 @@ import { Message } from "../../domain/entities/Message";
 import { SupabaseChatRepository } from "../../infrastructure/repositories/SupabaseChatRepository"; 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import * as Notifications from "expo-notifications";
 
 const chatRepo = new SupabaseChatRepository();
 const sendMessageUseCase = new SendMessageUseCase(chatRepo);
@@ -22,42 +21,28 @@ export function useChat(roomId: string) {
     queryKey: ["messages", roomId], // Clave única por sala
     queryFn: () => getMessagesUseCase.execute(roomId),
     enabled: !!user,
-    // Los mensajes antiguos no se revalidan automáticamente.
-    // Realtime se encarga de los mensajes nuevos.
-    staleTime: Infinity,
+    staleTime: 0,
   });
 
   // Paso 2: suscribirse al canal Realtime
   useEffect(() => {
     const unsubscribe = subscribeUseCase.execute(roomId, (newMsg) => {
-      // Si el mensaje es de otro usuario, disparamos una notificación local (Fallback de Expo Go)
-      if (user && newMsg.userId !== user.id) {
-        Notifications.scheduleNotificationAsync({
-          content: {
-            title: `Nuevo mensaje de @${newMsg.authorUsername}`,
-            body: newMsg.imageUrl ? "📷 [Imagen compartida]" : newMsg.content,
-            sound: "default",
-          },
-          trigger: null,
-        }).catch((err) => console.log("Error al disparar notificación local:", err));
-      }
-
       queryClient.setQueryData(["messages", roomId], (old: Message[] = []) => {
-        // Evitar duplicados: el optimistic update ya agregó este mensaje
         const exists = old.some((m) => m.id === newMsg.id);
         return exists ? old : [...old, newMsg];
       });
     });
-    return unsubscribe; // Cleanup al desmontar: cierra el WebSocket
-  }, [roomId, user]);
+    return unsubscribe;
+  }, [roomId]);
 
-async function sendPushNotification(tokens: string[], title: string, body: string) {
+async function sendPushNotification(tokens: string[], title: string, body: string, roomId: string) {
   if (tokens.length === 0) return;
   const messages = tokens.map((token) => ({
     to: token,
     sound: "default",
     title,
     body,
+    data: { roomId },
   }));
 
   try {
@@ -86,7 +71,7 @@ async function sendPushNotification(tokens: string[], title: string, body: strin
         const tokens = await chatRepo.getRecipientTokens(user!.id);
         const title = `Mensaje de @${user!.username}`;
         const body = imageUrl ? "📷 [Imagen compartida]" : content;
-        await sendPushNotification(tokens, title, body);
+        await sendPushNotification(tokens, title, body, roomId);
       } catch (e) {
         console.log("Error al enviar notificaciones push:", e);
       }

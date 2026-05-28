@@ -7,7 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { FlatList, Alert, KeyboardAvoidingView, Platform, TouchableOpacity } from "react-native";
 import { YStack, XStack, Text, Input } from "tamagui";
-import { Image } from "expo-image";
+import { AppwriteImage } from "@shared/presentation/components/ui/AppwriteImage";
 import * as ImagePicker from "expo-image-picker";
 import { AnimatedListItem } from "@shared/presentation/components/ui/AnimatedListItem";
 import { LottieLoader } from "@shared/presentation/components/ui/LottieLoader";
@@ -179,15 +179,14 @@ export default function ChatScreen() {
                         </Text>
                       )}
                       {msg.imageUrl ? (
-                        <Image
+                        <AppwriteImage
                           source={{ uri: msg.imageUrl }}
                           style={{
-                            width: 200, height: 150, borderRadius: 12,
+                            width: "100%", height: 200, borderRadius: 12,
                             marginBottom: msg.content ? 6 : 0,
                             backgroundColor: "#2A2F47",
                           }}
                           contentFit="cover"
-                          transition={200}
                         />
                       ) : null}
                       {msg.content ? (

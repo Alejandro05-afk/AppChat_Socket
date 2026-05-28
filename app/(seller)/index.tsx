@@ -7,7 +7,7 @@ import { useCallback, useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FlatList, Alert, TouchableOpacity } from "react-native";
 import { YStack, XStack, Text, Input } from "tamagui";
-import { Image } from "expo-image";
+import { AppwriteImage } from "@shared/presentation/components/ui/AppwriteImage";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -118,7 +118,7 @@ export default function SellerDashboard() {
           borderColor="rgba(255,255,255,0.10)"
         >
           {item.imageUrl ? (
-            <Image
+            <AppwriteImage
               source={{ uri: item.imageUrl }}
               style={{
                 width: "100%", height: 180,

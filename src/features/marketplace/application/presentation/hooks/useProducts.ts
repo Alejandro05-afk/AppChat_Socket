@@ -82,6 +82,7 @@ export function useProducts() {
     isLoading,
     isLoadingSeller,
     createProduct: createMutation.mutate,
+    createProductAsync: createMutation.mutateAsync,
     isCreating: createMutation.isPending,
     createError: createMutation.error?.message ?? null,
   };

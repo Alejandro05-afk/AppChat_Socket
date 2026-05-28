@@ -1,9 +1,10 @@
 import { appwriteClient, databases, storage, normalizeFileUri } from "@shared/infrastructure/appwrite/client";
-import { ID, Query } from "react-native-appwrite";
+import { ID, Query, Permission, Role } from "react-native-appwrite";
 import { IMarketplaceRepository } from "../../domain/repositories/IMarketplaceRepository";
 import { Product } from "../../domain/entities/Product";
 import { Inquiry, InquiryMessage } from "../../domain/entities/Inquiry";
 import { AppwriteMarketplaceMapper } from "../mappers/AppwriteMarketplaceMapper";
+import * as FileSystem from "expo-file-system";
 
 const DATABASE_ID = process.env.EXPO_PUBLIC_APPWRITE_DATABASE_ID!;
 const PRODUCTS_COLLECTION_ID = process.env.EXPO_PUBLIC_APPWRITE_PRODUCTS_COLLECTION_ID!;
@@ -130,21 +131,33 @@ export class AppwriteMarketplaceRepository implements IMarketplaceRepository {
     return unsubscribe;
   }
 
+  private mimeType(ext: string): string {
+    const mime: Record<string, string> = {
+      jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+      gif: "image/gif", webp: "image/webp", heic: "image/heic",
+    };
+    return mime[ext] ?? `image/${ext}`;
+  }
+
   async uploadProductImage(uri: string): Promise<string> {
     const fileExt = (uri.split(".").pop()?.split("?")[0] || "jpg").toLowerCase();
     const fileName = `products/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const fileInfo = await FileSystem.getInfoAsync(uri);
+    const size = fileInfo.exists ? (fileInfo.size ?? 0) : 0;
     const file = await storage.createFile(PRODUCT_IMAGES_BUCKET_ID, ID.unique(), {
-      uri: normalizeFileUri(uri), name: fileName, type: `image/${fileExt}`,
-    } as any);
+      uri: normalizeFileUri(uri), name: fileName, type: this.mimeType(fileExt), size,
+    }, [Permission.read(Role.any())]);
     return storage.getFileViewURL(PRODUCT_IMAGES_BUCKET_ID, file.$id).toString();
   }
 
   async uploadInquiryImage(uri: string): Promise<string> {
     const fileExt = (uri.split(".").pop()?.split("?")[0] || "jpg").toLowerCase();
     const fileName = `inquiry/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const fileInfo = await FileSystem.getInfoAsync(uri);
+    const size = fileInfo.exists ? (fileInfo.size ?? 0) : 0;
     const file = await storage.createFile(PRODUCT_IMAGES_BUCKET_ID, ID.unique(), {
-      uri: normalizeFileUri(uri), name: fileName, type: `image/${fileExt}`,
-    } as any);
+      uri: normalizeFileUri(uri), name: fileName, type: this.mimeType(fileExt), size,
+    }, [Permission.read(Role.any())]);
     return storage.getFileViewURL(PRODUCT_IMAGES_BUCKET_ID, file.$id).toString();
   }
 

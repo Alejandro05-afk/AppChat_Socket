@@ -26,3 +26,11 @@ export function clearAppwriteSession() {
 export function normalizeFileUri(uri: string): string {
   return Platform.OS === 'android' ? uri : uri.replace('file://', '');
 }
+
+export function getAppwriteImageHeaders(): Record<string, string> {
+  const session = client.headers?.['X-Appwrite-Session'] ?? '';
+  return {
+    'X-Appwrite-Project': process.env.EXPO_PUBLIC_APPWRITE_PROJECT_ID ?? '',
+    'X-Appwrite-Session': session,
+  };
+}

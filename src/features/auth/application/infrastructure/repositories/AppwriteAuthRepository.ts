@@ -102,6 +102,8 @@ export class AppwriteAuthRepository implements IAuthRepository {
   async getCurrentUser(): Promise<User | null> {
     try {
       const appwriteUser = await account.get();
+      const currentSession = await account.getSession("current");
+      setAppwriteSession((currentSession as any).secret);
       const profile = await this.getUserProfile(appwriteUser.$id);
       if (!profile) {
         return null;

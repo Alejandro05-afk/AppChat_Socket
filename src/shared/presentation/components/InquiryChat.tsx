@@ -3,7 +3,7 @@ import { InquiryMessage } from "@features/marketplace/application/domain/entitie
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { FlatList, Alert, KeyboardAvoidingView, Platform, TouchableOpacity } from "react-native";
 import { YStack, XStack, Text, Input } from "tamagui";
-import { Image } from "expo-image";
+import { AppwriteImage } from "@shared/presentation/components/ui/AppwriteImage";
 import { AnimatedListItem } from "@shared/presentation/components/ui/AnimatedListItem";
 import { LottieLoader } from "@shared/presentation/components/ui/LottieLoader";
 import { Avatar } from "@shared/presentation/components/ui/Avatar";
@@ -115,7 +115,7 @@ export default function InquiryChat({ inquiryId, currentUserId }: InquiryChatPro
                         </Text>
                       )}
                       {msg.imageUrl ? (
-                        <Image
+                        <AppwriteImage
                           source={{ uri: msg.imageUrl }}
                           style={{
                             width: 200, height: 150, borderRadius: 12,

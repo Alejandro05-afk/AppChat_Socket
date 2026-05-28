@@ -14,7 +14,7 @@ const repo = new AppwriteMarketplaceRepository();
 
 export default function NewProductScreen() {
   const user = useAuthStore((s) => s.user);
-  const { createProduct, isCreating, createError } = useProducts();
+  const { createProduct, createProductAsync, isCreating, createError } = useProducts();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(1);
@@ -53,13 +53,16 @@ export default function NewProductScreen() {
     try {
       let imageUrl: string | undefined;
       if (selectedImage) imageUrl = await repo.uploadProductImage(selectedImage);
-      createProduct({
+      await createProductAsync({
         sellerId: user!.id, name: name.trim(), description: description.trim(),
         price: parseFloat(price), imageUrl,
       });
       router.back();
-    } catch { Alert.alert("Error", "No se pudo subir la imagen."); }
-    finally { setIsUploading(false); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Error desconocido";
+      console.error("Error al crear producto:", msg);
+      Alert.alert("Error", msg);
+    } finally { setIsUploading(false); }
   };
 
   const progress = (step / 2) * 100;

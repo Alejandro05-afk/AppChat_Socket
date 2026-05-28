@@ -1,5 +1,6 @@
 import { appwriteClient, databases, storage, normalizeFileUri } from "@shared/infrastructure/appwrite/client";
-import { ID, Query } from "react-native-appwrite";
+import { ID, Query, Permission, Role } from "react-native-appwrite";
+import * as FileSystem from "expo-file-system";
 import { Message, Room } from "../../domain/entities/Message";
 import { IChatRepository } from "../../domain/repositories/IChatRepository";
 
@@ -96,9 +97,11 @@ export class AppwriteChatRepository implements IChatRepository {
   async uploadImage(uri: string): Promise<string> {
     const fileExt = uri.split(".").pop()?.split("?")[0] || "jpg";
     const fileName = `chat/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const fileInfo = await FileSystem.getInfoAsync(uri);
+    const size = fileInfo.exists ? (fileInfo.size ?? 0) : 0;
     const file = await storage.createFile(PRODUCT_IMAGES_BUCKET_ID, ID.unique(), {
-      uri: normalizeFileUri(uri), name: fileName, type: `image/${fileExt}`,
-    } as any);
+      uri: normalizeFileUri(uri), name: fileName, type: `image/${fileExt}`, size,
+    }, [Permission.read(Role.any())]);
     return storage.getFileViewURL(PRODUCT_IMAGES_BUCKET_ID, file.$id).toString();
   }
 

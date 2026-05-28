@@ -3,11 +3,12 @@ import { useProducts } from "@features/marketplace/application/presentation/hook
 import { SupabaseMarketplaceRepository } from "@features/marketplace/application/infrastructure/repositories/SupabaseMarketplaceRepository";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import {
-  ActivityIndicator, StyleSheet, Text, TextInput,
-  TouchableOpacity, View, ScrollView, Alert,
-} from "react-native";
+import { ScrollView, Alert, TouchableOpacity } from "react-native";
+import { YStack, XStack, Text, Input } from "tamagui";
 import * as ImagePicker from "expo-image-picker";
+import Animated, { FadeInUp } from "react-native-reanimated";
+import { AppButton } from "@shared/presentation/components/ui/AppButton";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const repo = new SupabaseMarketplaceRepository();
 
@@ -15,94 +16,167 @@ export default function NewProductScreen() {
   const user = useAuthStore((s) => s.user);
   const { createProduct, isCreating, createError } = useProducts();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const handlePickImage = async () => {
+  const handlePickImage = () => {
     Alert.alert("Agregar foto", "", [
-      {
-        text: "Tomar foto",
-        onPress: async () => {
-          const perm = await ImagePicker.requestCameraPermissionsAsync();
-          if (!perm.granted) { Alert.alert("Permiso requerido", "Se necesita acceso a la cámara."); return; }
-          const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.4 });
-          if (!result.canceled && result.assets[0]?.uri) setSelectedImage(result.assets[0].uri);
-        },
-      },
-      {
-        text: "Elegir de galería",
-        onPress: async () => {
-          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (status !== "granted") { Alert.alert("Permiso requerido", "Se requiere acceso a la galería."); return; }
-          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.4 });
-          if (!result.canceled && result.assets[0]?.uri) setSelectedImage(result.assets[0].uri);
-        },
-      },
+      { text: "Tomar foto", onPress: async () => {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) { Alert.alert("Permiso requerido"); return; }
+        const r = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.4 });
+        if (!r.canceled && r.assets[0]?.uri) setSelectedImage(r.assets[0].uri);
+      }},
+      { text: "Elegir de galería", onPress: async () => {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) { Alert.alert("Permiso requerido"); return; }
+        const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.4 });
+        if (!r.canceled && r.assets[0]?.uri) setSelectedImage(r.assets[0].uri);
+      }},
       { text: "Cancelar", style: "cancel" },
     ]);
   };
 
+  const handleNext = () => {
+    if (step === 1 && !name.trim()) { Alert.alert("Error", "El nombre es requerido"); return; }
+    if (step === 1 && (!price.trim() || isNaN(parseFloat(price)))) { Alert.alert("Error", "Precio inválido"); return; }
+    setStep((s) => Math.min(s + 1, 2));
+  };
+
   const handleCreate = async () => {
-    if (!name.trim()) { Alert.alert("Error", "El nombre es requerido"); return; }
-    if (!price.trim() || isNaN(parseFloat(price))) { Alert.alert("Error", "Precio inválido"); return; }
     setIsUploading(true);
     try {
       let imageUrl: string | undefined;
-      if (selectedImage) {
-        imageUrl = await repo.uploadProductImage(selectedImage);
-      }
+      if (selectedImage) imageUrl = await repo.uploadProductImage(selectedImage);
       createProduct({
-        sellerId: user!.id,
-        name: name.trim(),
-        description: description.trim(),
-        price: parseFloat(price),
-        imageUrl,
+        sellerId: user!.id, name: name.trim(), description: description.trim(),
+        price: parseFloat(price), imageUrl,
       });
       router.back();
-    } catch (e) {
-      Alert.alert("Error", "No se pudo subir la imagen.");
-    } finally {
-      setIsUploading(false);
-    }
+    } catch { Alert.alert("Error", "No se pudo subir la imagen."); }
+    finally { setIsUploading(false); }
   };
 
+  const progress = (step / 2) * 100;
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {createError ? <Text style={styles.error}>{createError}</Text> : null}
-      <Text style={styles.label}>Nombre del producto *</Text>
-      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Ej. iPhone 15" />
+    <YStack flex={1} backgroundColor="$bg100">
+      {/* Header */}
+      <YStack
+        backgroundColor="$bg200"
+        paddingTop={insets.top + 16}
+        paddingHorizontal={24}
+        paddingBottom={24}
+        borderBottomWidth={1}
+        borderBottomColor="rgba(255,255,255,0.08)"
+      >
+        <TouchableOpacity onPress={() => router.back()} style={{ marginBottom: 16 }}>
+          <Text fontSize={22} color="$seller" fontWeight="600">‹</Text>
+        </TouchableOpacity>
+        <Text fontSize={26} fontWeight="800" color="white" letterSpacing={-0.8}>
+          Nuevo Producto
+        </Text>
+        <Text fontSize={14} color="$textSecondary" marginTop={4} fontWeight="500">
+          Paso {step} de 2
+        </Text>
+        {/* Progress Bar */}
+        <YStack height={4} borderRadius={2} backgroundColor="$bg300" marginTop={12} overflow="hidden">
+          <YStack width={`${progress}%`} height="100%" backgroundColor="$seller" borderRadius={2} />
+        </YStack>
+      </YStack>
 
-      <Text style={styles.label}>Descripción</Text>
-      <TextInput style={styles.input} value={description} onChangeText={setDescription} placeholder="Descripción del producto..." multiline />
+      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        {createError && <Text color="#EF4444" fontSize={13} marginBottom={16} fontWeight="500">{createError}</Text>}
 
-      <Text style={styles.label}>Precio *</Text>
-      <TextInput style={styles.input} value={price} onChangeText={setPrice} placeholder="0.00" keyboardType="decimal-pad" />
+        {step === 1 ? (
+          <Animated.View entering={FadeInUp.springify().damping(18)}>
+            <Text fontSize={13} fontWeight="600" color="$textSecondary" marginLeft={4} marginBottom={6}>
+              Nombre del producto *
+            </Text>
+            <Input
+              backgroundColor="$bg300" borderWidth={1} borderColor="rgba(255,255,255,0.08)"
+              borderRadius={14} padding={14} fontSize={16} color="white"
+              marginBottom={16}
+              value={name} onChangeText={setName} placeholder="Ej. iPhone 15"
+              placeholderTextColor="$textMuted"
+            />
 
-      <TouchableOpacity style={styles.imageBtn} onPress={handlePickImage}>
-          <Text style={styles.imageBtnText}>{selectedImage ? "Imagen seleccionada" : "Añadir imagen"}</Text>
-      </TouchableOpacity>
+            <Text fontSize={13} fontWeight="600" color="$textSecondary" marginLeft={4} marginBottom={6}>
+              Descripción
+            </Text>
+            <Input
+              backgroundColor="$bg300" borderWidth={1} borderColor="rgba(255,255,255,0.08)"
+              borderRadius={14} padding={14} fontSize={16} color="white"
+              marginBottom={16}
+              value={description} onChangeText={setDescription}
+              placeholder="Descripción del producto..." multiline
+              placeholderTextColor="$textMuted"
+            />
 
-      <TouchableOpacity style={[styles.createBtn, (isCreating || isUploading) && { opacity: 0.6 }]} onPress={handleCreate} disabled={isCreating || isUploading}>
-        {isCreating || isUploading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.createBtnText}>Crear Producto</Text>}
-      </TouchableOpacity>
-    </ScrollView>
+            <Text fontSize={13} fontWeight="600" color="$textSecondary" marginLeft={4} marginBottom={6}>
+              Precio *
+            </Text>
+            <Input
+              backgroundColor="$bg300" borderWidth={1} borderColor="rgba(255,255,255,0.08)"
+              borderRadius={14} padding={14} fontSize={16} color="white"
+              marginBottom={24}
+              value={price} onChangeText={setPrice} placeholder="0.00"
+              keyboardType="decimal-pad" placeholderTextColor="$textMuted"
+            />
+
+            <AppButton variant="seller" onPress={handleNext} height={54}>
+              Siguiente
+            </AppButton>
+          </Animated.View>
+        ) : (
+          <Animated.View entering={FadeInUp.springify().damping(18)}>
+            <Text fontSize={13} fontWeight="600" color="$textSecondary" marginLeft={4} marginBottom={12}>
+              Imagen del producto
+            </Text>
+
+            <TouchableOpacity onPress={handlePickImage}>
+              <YStack
+                height={200}
+                backgroundColor="$bg300"
+                borderRadius={16}
+                borderWidth={1}
+                borderColor={selectedImage ? "$seller" : "rgba(255,255,255,0.08)"}
+                borderStyle={selectedImage ? "solid" : "dashed"}
+                justifyContent="center" alignItems="center"
+                marginBottom={24}
+              >
+                {selectedImage ? (
+                  <Text fontSize={18} fontWeight="700" color="$seller">✓ Imagen seleccionada</Text>
+                ) : (
+                  <>
+                    <Text fontSize={40} marginBottom={8} opacity={0.5}>📷</Text>
+                    <Text fontSize={14} color="$textSecondary" fontWeight="500">Toca para agregar foto</Text>
+                  </>
+                )}
+              </YStack>
+            </TouchableOpacity>
+
+            <XStack gap={12}>
+              <AppButton variant="ghost" flex={1} height={50} onPress={() => setStep(1)}>
+                Atrás
+              </AppButton>
+              <AppButton
+                variant="seller" flex={1} height={54}
+                loading={isCreating || isUploading}
+                disabled={isCreating || isUploading}
+                onPress={handleCreate}
+              >
+                {isUploading ? "Subiendo..." : "Publicar"}
+              </AppButton>
+            </XStack>
+          </Animated.View>
+        )}
+      </ScrollView>
+    </YStack>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FFF" },
-  content: { padding: 24, paddingBottom: 40 },
-  label: { fontSize: 13, fontWeight: "600", color: "#374151", marginBottom: 6, marginTop: 12 },
-  input: {
-    backgroundColor: "#F9FAFB", borderWidth: 1, borderColor: "#E5E7EB",
-    borderRadius: 12, padding: 14, fontSize: 16, color: "#1F2937",
-  },
-  error: { color: "#EF4444", fontSize: 13, marginBottom: 12 },
-  imageBtn: { backgroundColor: "#F3F4F6", borderRadius: 12, padding: 14, alignItems: "center", marginTop: 16 },
-  imageBtnText: { fontSize: 15, fontWeight: "600", color: "#4B5563" },
-  createBtn: { backgroundColor: "#7C3AED", borderRadius: 12, padding: 14, alignItems: "center", marginTop: 24 },
-  createBtnText: { color: "#FFF", fontWeight: "600", fontSize: 15 },
-});

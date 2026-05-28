@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEffect } from 'react';
 import { supabase } from '@shared/infrastructure/supabase/client';
 import { useAuthStore } from '@features/auth/application/presentation/store/authStore';

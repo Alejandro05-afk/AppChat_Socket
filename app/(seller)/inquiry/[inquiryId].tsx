@@ -1,21 +1,38 @@
 import { useAuthStore } from "@features/auth/application/presentation/store/authStore";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import InquiryChat from "@shared/presentation/components/InquiryChat";
-import { View, StyleSheet } from "react-native";
+import { YStack, XStack, Text } from "tamagui";
+import { TouchableOpacity } from "react-native";
+import { Avatar } from "@shared/presentation/components/ui/Avatar";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function SellerInquiryScreen() {
   const { inquiryId } = useLocalSearchParams<{ inquiryId: string }>();
   const user = useAuthStore((s) => s.user);
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   if (!inquiryId || !user) return null;
 
   return (
-    <View style={styles.container}>
+    <YStack flex={1} backgroundColor="#0F1117">
+      <YStack
+        backgroundColor="$bg200"
+        paddingTop={insets.top + 8} paddingBottom={12} paddingHorizontal={16}
+        borderBottomWidth={1} borderBottomColor="rgba(255,255,255,0.08)"
+      >
+        <XStack alignItems="center" gap={12}>
+          <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
+            <Text fontSize={22} color="$seller" fontWeight="600">‹</Text>
+          </TouchableOpacity>
+          <Avatar name="Cliente" size={36} />
+          <YStack flex={1}>
+            <Text fontSize={16} fontWeight="700" color="white" numberOfLines={1}>Cliente</Text>
+            <Text fontSize={12} color="$textSecondary" fontWeight="500">Consulta de producto</Text>
+          </YStack>
+        </XStack>
+      </YStack>
       <InquiryChat inquiryId={inquiryId} currentUserId={user.id} />
-    </View>
+    </YStack>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F3F4F6" },
-});

@@ -2,29 +2,19 @@ import { Room } from "@features/chat/application/domain/entities/Message";
 import { useRooms } from "@features/chat/application/presentation/hooks/useRooms";
 import { useUnreadStore } from "@shared/presentation/store/unreadStore";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Modal,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  StatusBar,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
-
-const getRoomAvatarColor = (name: string) => {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const h = Math.abs(hash % 360);
-  return `hsl(${h}, 65%, 55%)`;
-};
+import { useState, useMemo } from "react";
+import { FlatList, TouchableOpacity, Alert } from "react-native";
+import { YStack, XStack, Text, Input } from "tamagui";
+import Animated, { ZoomIn } from "react-native-reanimated";
+import { AppButton } from "@shared/presentation/components/ui/AppButton";
+import { AppCard } from "@shared/presentation/components/ui/AppCard";
+import { SearchBar } from "@shared/presentation/components/ui/SearchBar";
+import { Avatar } from "@shared/presentation/components/ui/Avatar";
+import { AnimatedListItem } from "@shared/presentation/components/ui/AnimatedListItem";
+import { LottieEmpty } from "@shared/presentation/components/ui/LottieEmpty";
+import { PulseFAB } from "@shared/presentation/components/ui/PulseFAB";
+import { AnimatedBottomSheet } from "@shared/presentation/components/ui/AnimatedBottomSheet";
+import { CardShimmer } from "@shared/presentation/components/ui/Shimmer";
 
 export default function RoomsScreen() {
   const { rooms, isLoading, createRoom, isCreating, createError, getRoom } = useRooms();
@@ -36,444 +26,221 @@ export default function RoomsScreen() {
   const [roomIdInput, setRoomIdInput] = useState("");
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState("");
+  const [search, setSearch] = useState("");
 
-  const handleCloseModal = () => {
+  const filtered = useMemo(
+    () => search.trim()
+      ? rooms.filter((r) => r.name.toLowerCase().includes(search.toLowerCase()))
+      : rooms,
+    [rooms, search],
+  );
+
+  const handleClose = () => {
     setModalVisible(false);
-    setRoomName("");
-    setRoomIdInput("");
-    setJoinError("");
+    setRoomName(""); setRoomIdInput(""); setJoinError("");
     setActiveTab("create");
   };
 
   const handleCreate = () => {
     if (!roomName.trim() || isCreating) return;
-    createRoom(roomName.trim(), {
-      onSuccess: () => {
-        handleCloseModal();
-      },
-    });
+    createRoom(roomName.trim(), { onSuccess: () => handleClose() });
   };
 
   const handleJoin = async () => {
-    const trimmedId = roomIdInput.trim();
-    if (!trimmedId) return;
-
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(trimmedId)) {
-      setJoinError("El ID de la sala debe ser un formato UUID válido.");
-      return;
-    }
-
-    setJoinLoading(true);
-    setJoinError("");
+    const id = roomIdInput.trim();
+    if (!id) return;
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuid.test(id)) { setJoinError("ID inválido"); return; }
+    setJoinLoading(true); setJoinError("");
     try {
-      const room = await getRoom(trimmedId);
-      if (room) {
-        handleCloseModal();
-        router.push(`/chat/${room.id}`);
-      } else {
-        setJoinError("No se encontró ninguna sala con este ID.");
-      }
-    } catch (e) {
-      console.error("Error al buscar sala:", e);
-      setJoinError("Ocurrió un error al buscar la sala. Verifica tu conexión.");
-    } finally {
-      setJoinLoading(false);
-    }
+      const room = await getRoom(id);
+      if (room) { handleClose(); router.push(`/chat/${room.id}`); }
+      else setJoinError("Sala no encontrada");
+    } catch { setJoinError("Error al buscar"); }
+    finally { setJoinLoading(false); }
   };
 
-  const renderRoom = ({ item }: { item: Room }) => {
-    const avatarColor = getRoomAvatarColor(item.name);
-    const firstLetter = item.name.charAt(0).toUpperCase();
+  const handleLongPress = (room: Room) => {
+    Alert.alert(room.name, "", [
+      { text: "Compartir ID", onPress: () => Alert.alert("ID de Sala", room.id) },
+      { text: "Cancelar", style: "cancel" },
+    ]);
+  };
+
+  const renderRoom = ({ item, index }: { item: Room; index: number }) => {
     const unread = unreadCounts[item.id] ?? 0;
 
     return (
-      <TouchableOpacity
-        style={styles.roomCard}
-        activeOpacity={0.85}
-        onPress={() => router.push(`/chat/${item.id}`)}
-      >
-        <View style={styles.avatarContainer}>
-          <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
-            <Text style={styles.avatarText}>{firstLetter}</Text>
-          </View>
-          {unread > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{unread > 99 ? '99+' : unread}</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.roomInfo}>
-          <Text style={styles.roomName}># {item.name}</Text>
-          <Text style={styles.roomSubtitle}>Entra y comparte con la comunidad</Text>
-        </View>
-        <View style={styles.roomMeta}>
-          <Text style={styles.roomDate}>
-            {item.createdAt.toLocaleDateString([], { month: "short", day: "numeric" })}
-          </Text>
-          <Text style={styles.arrowIcon}>➔</Text>
-        </View>
-      </TouchableOpacity>
+      <AnimatedListItem index={index}>
+        <AppCard onPress={() => router.push(`/chat/${item.id}`)} onLongPress={() => handleLongPress(item)} marginBottom={12}>
+          <XStack alignItems="center" gap={14} padding={16}>
+            <YStack position="relative">
+              <Avatar name={item.name} size={48} />
+              {unread > 0 && (
+                <Animated.View entering={ZoomIn.springify().damping(12)} style={{
+                  position: "absolute", top: -4, right: -4,
+                  backgroundColor: "#EF4444", borderRadius: 10,
+                  minWidth: 20, height: 20,
+                  alignItems: "center", justifyContent: "center",
+                  paddingHorizontal: 5,
+                }}>
+                  <Text color="white" fontSize={11} fontWeight="700">
+                    {unread > 99 ? "99+" : unread}
+                  </Text>
+                </Animated.View>
+              )}
+            </YStack>
+            <YStack flex={1} gap={3}>
+              <Text color="$textPrimary" fontWeight="700" fontSize={16}>
+                # {item.name}
+              </Text>
+              <Text color="$textSecondary" fontSize={13}>
+                Entra y comparte
+              </Text>
+            </YStack>
+            <YStack alignItems="flex-end" gap={4}>
+              <Text color="$textMuted" fontSize={12}>
+                {item.createdAt.toLocaleDateString([], { month: "short", day: "numeric" })}
+              </Text>
+              <Text color="$blue400" fontSize={12} fontWeight="700">→</Text>
+            </YStack>
+          </XStack>
+        </AppCard>
+      </AnimatedListItem>
     );
   };
 
-  if (isLoading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#4F46E5" />
-        <Text style={styles.loadingText}>Cargando salas...</Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      <View style={styles.header}>
-        <Text style={styles.headerSubtitle}>Canales activos</Text>
-        <Text style={styles.headerTitle}>Explorar Salas</Text>
-      </View>
+    <YStack flex={1} backgroundColor="$bg100">
+      {/* Header */}
+      <YStack paddingTop={60} paddingHorizontal={24} paddingBottom={8}>
+        <Text fontSize={12} fontWeight="700" color="$blue400" textTransform="uppercase" letterSpacing={1.5}>
+          Canales activos
+        </Text>
+        <Text fontSize={26} fontWeight="800" color="white" marginTop={2}>
+          Explorar Salas
+        </Text>
+      </YStack>
 
-      <FlatList
-        data={rooms}
-        keyExtractor={(r) => r.id}
-        renderItem={renderRoom}
-        contentContainerStyle={rooms.length === 0 ? styles.listEmptyStyle : styles.listStyle}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>💬</Text>
-            <Text style={styles.empty}>No hay salas creadas aún.</Text>
-            <Text style={styles.emptySub}>Sé el primero en iniciar un canal activo para chatear.</Text>
-            <TouchableOpacity style={styles.emptyBtn} onPress={() => setModalVisible(true)}>
-              <Text style={styles.emptyBtnText}>Crear primera sala</Text>
-            </TouchableOpacity>
-          </View>
-        }
-      />
+      <SearchBar value={search} onChangeText={setSearch} placeholder="Buscar salas..." />
 
-      <TouchableOpacity
-        style={styles.fab}
-        activeOpacity={0.9}
-        onPress={() => setModalVisible(true)}
-      >
-        <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
+      {isLoading ? (
+        <YStack padding={16}>
+          {[0, 1, 2].map((i) => <CardShimmer key={i} />)}
+        </YStack>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(r) => r.id}
+          renderItem={renderRoom}
+          contentContainerStyle={
+            filtered.length === 0
+              ? { flex: 1, justifyContent: "center", padding: 24 }
+              : { padding: 16, paddingBottom: 100 }
+          }
+          ListEmptyComponent={
+            search.trim() ? (
+              <YStack alignItems="center" paddingTop={40}>
+                <Text fontSize={16} color="$textSecondary" textAlign="center">
+                  Sin resultados para "{search}"
+                </Text>
+              </YStack>
+            ) : (
+              <LottieEmpty
+                source={require("../../assets/animations/empty-chat.json")}
+                title="No hay salas aún"
+                subtitle="Sé el primero en crear un canal para chatear"
+                action={<AppButton variant="primary" onPress={() => setModalVisible(true)}>Crear sala</AppButton>}
+              />
+            )
+          }
+        />
+      )}
 
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={handleCloseModal}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ flex: 1 }}
-        >
-          <View style={styles.overlay}>
-            <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              activeOpacity={1}
-              onPress={handleCloseModal}
+      <PulseFAB onPress={() => setModalVisible(true)} />
+
+      {/* Bottom Sheet Modal */}
+      <AnimatedBottomSheet visible={modalVisible} onClose={() => setModalVisible(false)}>
+        <XStack backgroundColor="$bg300" borderRadius={12} padding={4} marginBottom={24}>
+          <TouchableOpacity
+            style={{ flex: 1, paddingVertical: 10, alignItems: "center",
+              borderRadius: 10, backgroundColor: activeTab === "create" ? "$bg400" : "transparent" }}
+            onPress={() => setActiveTab("create")}
+          >
+            <Text fontSize={14} fontWeight="600" color={activeTab === "create" ? "$blue400" : "$textMuted"}>
+              Crear sala
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ flex: 1, paddingVertical: 10, alignItems: "center",
+              borderRadius: 10, backgroundColor: activeTab === "join" ? "$bg400" : "transparent" }}
+            onPress={() => setActiveTab("join")}
+          >
+            <Text fontSize={14} fontWeight="600" color={activeTab === "join" ? "$blue400" : "$textMuted"}>
+              Unirse
+            </Text>
+          </TouchableOpacity>
+        </XStack>
+
+        {activeTab === "create" ? (
+          <>
+            <Text fontSize={22} fontWeight="800" color="white" letterSpacing={-0.5}>
+              Crear Nueva Sala
+            </Text>
+            <Text fontSize={14} color="$textSecondary" marginTop={4} marginBottom={20}>
+              Dale un nombre único a tu canal
+            </Text>
+            {createError && <Text color="#EF4444" fontSize={13} marginBottom={12}>{createError}</Text>}
+            <Input
+              backgroundColor="$bg300" borderWidth={1} borderColor="rgba(255,255,255,0.08)"
+              borderRadius={14} padding={14} fontSize={16} color="white"
+              marginBottom={20}
+              placeholder="Nombre de la sala"
+              placeholderTextColor="$textMuted"
+              value={roomName} onChangeText={setRoomName} autoFocus maxLength={30}
             />
-            <View style={styles.dialog}>
-
-              {/* Tabs */}
-              <View style={styles.tabs}>
-                <TouchableOpacity
-                  style={[styles.tab, activeTab === "create" && styles.tabActive]}
-                  onPress={() => setActiveTab("create")}
-                >
-                  <Text style={[styles.tabText, activeTab === "create" && styles.tabTextActive]}>
-                    Crear sala
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.tab, activeTab === "join" && styles.tabActive]}
-                  onPress={() => setActiveTab("join")}
-                >
-                  <Text style={[styles.tabText, activeTab === "join" && styles.tabTextActive]}>
-                    Unirse por ID
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Tab: Crear */}
-              {activeTab === "create" ? (
-                <>
-                  <View style={styles.dialogHeader}>
-                    <Text style={styles.dialogTitle}>Crear Nueva Sala</Text>
-                    <Text style={styles.dialogSubtitle}>
-                      Escribe el nombre de la sala que deseas iniciar
-                    </Text>
-                  </View>
-
-                  {createError && <Text style={styles.dialogError}>{createError}</Text>}
-
-                  <TextInput
-                    style={styles.dialogInput}
-                    placeholder="Ej. Desarrolladores Mobile"
-                    placeholderTextColor="#9CA3AF"
-                    value={roomName}
-                    onChangeText={setRoomName}
-                    autoFocus
-                    maxLength={30}
-                  />
-
-                  <View style={styles.dialogActions}>
-                    <TouchableOpacity style={styles.cancelBtn} onPress={handleCloseModal}>
-                      <Text style={styles.cancelText}>Cancelar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.createBtn, isCreating && { opacity: 0.6 }]}
-                      onPress={handleCreate}
-                      disabled={isCreating}
-                    >
-                      {isCreating ? (
-                        <ActivityIndicator color="#fff" size="small" />
-                      ) : (
-                        <Text style={styles.createText}>Crear sala</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </>
-              ) : (
-                /* Tab: Unirse */
-                <>
-                  <View style={styles.dialogHeader}>
-                    <Text style={styles.dialogTitle}>Unirse a una Sala</Text>
-                    <Text style={styles.dialogSubtitle}>
-                      Pega el ID de la sala a la que quieres entrar
-                    </Text>
-                  </View>
-
-                  {joinError ? <Text style={styles.dialogError}>{joinError}</Text> : null}
-
-                  <TextInput
-                    style={styles.dialogInput}
-                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                    placeholderTextColor="#9CA3AF"
-                    value={roomIdInput}
-                    onChangeText={(text) => {
-                      setRoomIdInput(text);
-                      setJoinError("");
-                    }}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoFocus
-                  />
-
-                  <View style={styles.dialogActions}>
-                    <TouchableOpacity style={styles.cancelBtn} onPress={handleCloseModal}>
-                      <Text style={styles.cancelText}>Cancelar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.createBtn, joinLoading && { opacity: 0.6 }]}
-                      onPress={handleJoin}
-                      disabled={joinLoading}
-                    >
-                      {joinLoading ? (
-                        <ActivityIndicator color="#fff" size="small" />
-                      ) : (
-                        <Text style={styles.createText}>Unirse</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </View>
+            <XStack gap={12}>
+              <AppButton variant="ghost" flex={1} height={50} onPress={handleClose}>
+                Cancelar
+              </AppButton>
+              <AppButton variant="primary" flex={1} height={50}
+                loading={isCreating} disabled={isCreating} onPress={handleCreate}>
+                Crear
+              </AppButton>
+            </XStack>
+          </>
+        ) : (
+          <>
+            <Text fontSize={22} fontWeight="800" color="white" letterSpacing={-0.5}>
+              Unirse a Sala
+            </Text>
+            <Text fontSize={14} color="$textSecondary" marginTop={4} marginBottom={20}>
+              Pega el ID de la sala para unirte
+            </Text>
+            {joinError && <Text color="#EF4444" fontSize={13} marginBottom={12}>{joinError}</Text>}
+            <Input
+              backgroundColor="$bg300" borderWidth={1}
+              borderColor={joinError ? "#EF4444" : "rgba(255,255,255,0.08)"}
+              borderRadius={14} padding={14} fontSize={15} color="white"
+              marginBottom={20}
+              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              placeholderTextColor="$textMuted"
+              value={roomIdInput}
+              onChangeText={(t) => { setRoomIdInput(t); setJoinError(""); }}
+              autoCapitalize="none" autoFocus
+            />
+            <XStack gap={12}>
+              <AppButton variant="ghost" flex={1} height={50} onPress={handleClose}>
+                Cancelar
+              </AppButton>
+              <AppButton variant="primary" flex={1} height={50}
+                loading={joinLoading} disabled={joinLoading} onPress={handleJoin}>
+                Unirse
+              </AppButton>
+            </XStack>
+          </>
+        )}
+      </AnimatedBottomSheet>
+    </YStack>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB" },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F9FAFB" },
-  loadingText: { marginTop: 12, fontSize: 15, color: "#6B7280", fontWeight: "500" },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 16,
-    backgroundColor: "#FFF",
-    borderBottomWidth: 1,
-    borderColor: "#F3F4F6",
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#6366F1",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  headerTitle: { fontSize: 26, fontWeight: "800", color: "#111827", marginTop: 4 },
-  listStyle: { padding: 16, paddingBottom: 100 },
-  listEmptyStyle: { flex: 1, justifyContent: "center", padding: 24 },
-  roomCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: "#F3F4F6",
-  },
-  avatarContainer: {
-    position: "relative",
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarText: { color: "#FFF", fontSize: 18, fontWeight: "700" },
-  badge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    backgroundColor: "#EF4444",
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 5,
-  },
-  badgeText: {
-    color: "#FFF",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  roomInfo: { flex: 1, marginLeft: 16 },
-  roomName: { fontSize: 16, fontWeight: "700", color: "#1F2937" },
-  roomSubtitle: { fontSize: 13, color: "#6B7280", marginTop: 2 },
-  roomMeta: { alignItems: "flex-end", justifyContent: "space-between", height: 42 },
-  roomDate: { fontSize: 12, fontWeight: "500", color: "#9CA3AF" },
-  arrowIcon: { fontSize: 12, color: "#6366F1", marginTop: 4, fontWeight: "700" },
-  fab: {
-    position: "absolute",
-    right: 24,
-    bottom: 24,
-    backgroundColor: "#6366F1",
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#6366F1",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  fabText: { color: "#FFF", fontSize: 32, fontWeight: "300" },
-  emptyContainer: { alignItems: "center", paddingHorizontal: 16 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  empty: { fontSize: 18, fontWeight: "700", color: "#1F2937" },
-  emptySub: {
-    fontSize: 14,
-    color: "#6B7280",
-    textAlign: "center",
-    marginTop: 6,
-    marginBottom: 20,
-  },
-  emptyBtn: {
-    backgroundColor: "#6366F1",
-    borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    shadowColor: "#6366F1",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  emptyBtnText: { color: "#FFF", fontWeight: "600", fontSize: 15 },
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(17, 24, 39, 0.6)",
-    justifyContent: "flex-end",
-  },
-  dialog: {
-    backgroundColor: "#FFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 20,
-  },
-  // Tabs
-  tabs: {
-    flexDirection: "row",
-    backgroundColor: "#F3F4F6",
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 20,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  tabActive: {
-    backgroundColor: "#FFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  tabText: { fontSize: 14, fontWeight: "600", color: "#9CA3AF" },
-  tabTextActive: { color: "#6366F1" },
-  // Dialog content
-  dialogHeader: { marginBottom: 20 },
-  dialogTitle: { fontSize: 20, fontWeight: "800", color: "#111827" },
-  dialogSubtitle: { fontSize: 14, color: "#6B7280", marginTop: 4 },
-  dialogError: { color: "#EF4444", fontSize: 13, marginBottom: 12, fontWeight: "500" },
-  dialogInput: {
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    color: "#1F2937",
-    marginBottom: 24,
-  },
-  dialogActions: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  cancelBtn: {
-    flex: 1,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 12,
-    padding: 14,
-    alignItems: "center",
-  },
-  cancelText: { color: "#4B5563", fontSize: 15, fontWeight: "600" },
-  createBtn: {
-    flex: 1,
-    backgroundColor: "#6366F1",
-    borderRadius: 12,
-    padding: 14,
-    alignItems: "center",
-    shadowColor: "#6366F1",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  createText: { color: "#FFF", fontWeight: "600", fontSize: 15 },
-});

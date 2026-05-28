@@ -1,318 +1,178 @@
-import { useAuth } from "@features/auth/application/presentation/hooks/useAuth"; 
+import { useAuth } from "@features/auth/application/presentation/hooks/useAuth";
 import { Link } from "expo-router";
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  StatusBar,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from "react-native";
+import { ScrollView, KeyboardAvoidingView, Platform, Pressable } from "react-native";
+import { YStack, XStack, Text } from "tamagui";
+import { Feather } from "@expo/vector-icons";
+import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
+import { AppButton } from "@shared/presentation/components/ui/AppButton";
+import { AppInput } from "@shared/presentation/components/ui/AppInput";
+import { GlassCard } from "@shared/presentation/components/ui/GlassCard";
+
+const roles = [
+  { key: "client" as const, label: "Cliente", icon: "shopping-bag" as const },
+  { key: "seller" as const, label: "Vendedor", icon: "briefcase" as const },
+];
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
-  const [role, setRole] = useState<'seller' | 'client'>('client');
-  const [isUsernameFocused, setIsUsernameFocused] = useState(false);
-  const [isEmailFocused, setIsEmailFocused] = useState(false);
-  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
+  const [role, setRole] = useState<"seller" | "client">("client");
   const { register, isLoading, error } = useAuth();
 
   return (
     <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: "#0F1117" }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.keyboardContainer}
     >
-      <StatusBar barStyle="dark-content" />
-      <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
-        <View style={styles.container}>
-          {/* Logo Concept */}
-          <View style={styles.logoContainer}>
-            <View style={styles.logoBadge}>
-              <Text style={styles.logoText}>💬</Text>
-            </View>
-            <Text style={styles.brandName}>SpaceChat</Text>
-            <Text style={styles.brandTagline}>Crea una cuenta en segundos</Text>
-          </View>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
+      >
+        <YStack padding={28} gap={0}>
+          <Animated.View entering={FadeInDown.delay(100).springify().damping(18)}>
+            <YStack alignItems="center" marginBottom={28}>
+              <YStack
+                width={90} height={90} borderRadius={24}
+                backgroundColor="rgba(59,130,246,0.15)"
+                justifyContent="center" alignItems="center"
+                borderWidth={1} borderColor="rgba(59,130,246,0.25)"
+              >
+                <Feather name="message-circle" size={38} color="#3B82F6" />
+              </YStack>
+              <Text fontSize={26} fontWeight="800" color="white" textAlign="center" marginTop={12}>
+                Crear Cuenta
+              </Text>
+              <Text fontSize={14} color="$textSecondary" textAlign="center" marginTop={2}>
+                Únete a SpaceChat
+              </Text>
+            </YStack>
+          </Animated.View>
 
-          {/* Form Card */}
-          <View style={styles.card}>
-            <Text style={styles.title}>Registrarse ✨</Text>
-            <Text style={styles.subtitle}>Comienza a chatear con tus amigos</Text>
+          <Animated.View entering={FadeInDown.delay(250).springify().damping(16)}>
+            <GlassCard gap={0}>
+              <XStack gap={8} alignItems="center" marginBottom={20}>
+                <Feather name="user-plus" size={20} color="#3B82F6" />
+                <Text fontSize={18} fontWeight="700" color="white">
+                  Completa tus datos
+                </Text>
+              </XStack>
 
-            {error && (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>⚠️ {error}</Text>
-              </View>
-            )}
+              {error && (
+                <Animated.View entering={FadeIn}>
+                  <XStack
+                    backgroundColor="rgba(239,68,68,0.15)"
+                    borderColor="rgba(239,68,68,0.3)"
+                    borderWidth={1} borderRadius={14} padding={14} marginBottom={16}
+                    gap={8} alignItems="center"
+                  >
+                    <Feather name="alert-circle" size={16} color="#EF4444" />
+                    <Text fontSize={13} fontWeight="600" color="#EF4444" flex={1} textAlign="center">
+                      {error}
+                    </Text>
+                  </XStack>
+                </Animated.View>
+              )}
 
-            {/* Input Username */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Nombre de Usuario</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  isUsernameFocused && styles.inputFocused
-                ]}
+              <AppInput
+                label={
+                  <XStack gap={6} alignItems="center">
+                    <Feather name="user" size={13} color="#6B7280" />
+                    <Text fontSize={13} fontWeight="600" color="$textSecondary">Nombre de Usuario</Text>
+                  </XStack>
+                }
                 placeholder="ej. alejo_dev"
-                placeholderTextColor="#9CA3AF"
                 value={username}
                 onChangeText={setUsername}
                 autoCapitalize="none"
-                onFocus={() => setIsUsernameFocused(true)}
-                onBlur={() => setIsUsernameFocused(false)}
               />
-            </View>
 
-            {/* Input Email */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Correo Electrónico</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  isEmailFocused && styles.inputFocused
-                ]}
+              <AppInput
+                label={
+                  <XStack gap={6} alignItems="center">
+                    <Feather name="mail" size={13} color="#6B7280" />
+                    <Text fontSize={13} fontWeight="600" color="$textSecondary">Correo Electrónico</Text>
+                  </XStack>
+                }
                 placeholder="nombre@ejemplo.com"
-                placeholderTextColor="#9CA3AF"
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
                 keyboardType="email-address"
-                onFocus={() => setIsEmailFocused(true)}
-                onBlur={() => setIsEmailFocused(false)}
               />
-            </View>
 
-            {/* Input Password */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Contraseña</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  isPasswordFocused && styles.inputFocused
-                ]}
+              <AppInput
+                label={
+                  <XStack gap={6} alignItems="center">
+                    <Feather name="lock" size={13} color="#6B7280" />
+                    <Text fontSize={13} fontWeight="600" color="$textSecondary">Contraseña</Text>
+                  </XStack>
+                }
                 placeholder="Mínimo 6 caracteres"
-                placeholderTextColor="#9CA3AF"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
-                onFocus={() => setIsPasswordFocused(true)}
-                onBlur={() => setIsPasswordFocused(false)}
               />
-            </View>
 
-            {/* Role Selector */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Tipo de cuenta</Text>
-              <View style={styles.roleRow}>
-                {(['client', 'seller'] as const).map((r) => (
-                  <TouchableOpacity
-                    key={r}
-                    style={[styles.roleBtn, role === r && styles.roleBtnActive]}
-                    onPress={() => setRole(r)}
-                  >
-                    <Text style={styles.roleIcon}>{r === 'client' ? '🛍️' : '🏪'}</Text>
-                    <Text style={[styles.roleText, role === r && styles.roleTextActive]}>
-                      {r === 'client' ? 'Cliente' : 'Vendedor'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+              {/* Role Selector */}
+              <YStack marginBottom={20} gap={10}>
+                <XStack gap={6} alignItems="center" marginLeft={4}>
+                  <Feather name="users" size={13} color="#6B7280" />
+                  <Text fontSize={13} fontWeight="600" color="$textSecondary">
+                    Tipo de cuenta
+                  </Text>
+                </XStack>
+                <XStack gap={12}>
+                  {roles.map((r) => {
+                    const active = role === r.key;
+                    const roleColor = r.key === "client" ? "#3B82F6" : "#8B5CF6";
+                    return (
+                      <Pressable key={r.key} onPress={() => setRole(r.key)} style={{ flex: 1 }}>
+                        <GlassCard
+                          alignItems="center" padding={14}
+                          borderColor={active ? roleColor : "rgba(255,255,255,0.08)"}
+                          backgroundColor={active
+                            ? `${roleColor}1A`
+                            : "rgba(255,255,255,0.04)"}
+                        >
+                          <Feather name={r.icon} size={26} color={active ? roleColor : "#6B7280"} />
+                          <Text fontSize={13} fontWeight="600" color={active ? roleColor : "$textMuted"} marginTop={8}>
+                            {r.label}
+                          </Text>
+                        </GlassCard>
+                      </Pressable>
+                    );
+                  })}
+                </XStack>
+              </YStack>
 
-            {/* Submit Button */}
-            <TouchableOpacity
-              style={[styles.button, isLoading && styles.buttonDisabled]}
-              onPress={() => register({ email, password, username, role })}
-              disabled={isLoading}
-              activeOpacity={0.85}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Registrarse</Text>
-              )}
-            </TouchableOpacity>
+              <AppButton
+                variant={role === "client" ? "client" : "seller"}
+                loading={isLoading}
+                disabled={isLoading}
+                onPress={() => register({ email, password, username, role })}
+                height={54}
+                icon={<Feather name="arrow-right" size={18} color="white" />}
+              >
+                Crear cuenta
+              </AppButton>
 
-            {/* Login Link */}
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>¿Ya tienes una cuenta? </Text>
-              <Link href="/(auth)/login" asChild>
-                <TouchableOpacity>
-                  <Text style={styles.footerLink}>Inicia Sesión</Text>
-                </TouchableOpacity>
-              </Link>
-            </View>
-          </View>
-        </View>
+              <XStack justifyContent="center" alignItems="center" marginTop={24}>
+                <Text fontSize={14} color="$textSecondary" fontWeight="500">
+                  ¿Ya tienes cuenta?{" "}
+                </Text>
+                <Link href="/(auth)/login" asChild>
+                  <Text fontSize={14} color="$blue400" fontWeight="700">
+                    Inicia Sesión
+                  </Text>
+                </Link>
+              </XStack>
+            </GlassCard>
+          </Animated.View>
+        </YStack>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  keyboardContainer: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
-  container: {
-    padding: 24,
-    justifyContent: "center",
-  },
-  logoContainer: {
-    alignItems: "center",
-    marginBottom: 32,
-  },
-  logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: "#E0E7FF",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#6366F1",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  logoText: {
-    fontSize: 32,
-  },
-  brandName: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#1F2937",
-    marginTop: 12,
-    letterSpacing: -0.5,
-  },
-  brandTagline: {
-    fontSize: 14,
-    color: "#6B7280",
-    marginTop: 4,
-    fontWeight: "500",
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.04,
-    shadowRadius: 20,
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: "#F3F4F6",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#111827",
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#6B7280",
-    textAlign: "center",
-    marginTop: 4,
-    marginBottom: 24,
-    fontWeight: "500",
-  },
-  errorContainer: {
-    backgroundColor: "#FEF2F2",
-    borderColor: "#FEE2E2",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-  },
-  errorText: {
-    color: "#EF4444",
-    fontSize: 13,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  inputGroup: {
-    marginBottom: 18,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: 8,
-    marginLeft: 4,
-  },
-  input: {
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 15,
-    color: "#1F2937",
-  },
-  inputFocused: {
-    borderColor: "#6366F1",
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#6366F1",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-  },
-  button: {
-    backgroundColor: "#6366F1",
-    borderRadius: 12,
-    padding: 15,
-    alignItems: "center",
-    marginTop: 8,
-    shadowColor: "#6366F1",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 20,
-  },
-  footerText: {
-    fontSize: 14,
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-  footerLink: {
-    fontSize: 14,
-    color: "#6366F1",
-    fontWeight: "700",
-  },
-  roleRow: { flexDirection: 'row', gap: 12 },
-  roleBtn: {
-    flex: 1, borderRadius: 12, borderWidth: 1.5,
-    borderColor: '#E5E7EB', padding: 14,
-    alignItems: 'center', backgroundColor: '#F9FAFB',
-  },
-  roleBtnActive: { borderColor: '#6366F1', backgroundColor: '#EEF2FF' },
-  roleIcon: { fontSize: 24, marginBottom: 4 },
-  roleText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
-  roleTextActive: { color: '#4F46E5' },
-});

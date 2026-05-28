@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { Platform, LogBox } from "react-native";
+import { TamaguiProvider } from 'tamagui';
+import config from '../tamagui.config';
 
 LogBox.ignoreLogs([
   "expo-notifications: Android Push notifications",
@@ -24,6 +26,8 @@ const authRepo = new SupabaseAuthRepository();
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -154,8 +158,10 @@ function AuthGuard() {
 
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthGuard />
-    </QueryClientProvider>
+    <TamaguiProvider config={config} defaultTheme="dark">
+      <QueryClientProvider client={queryClient}>
+        <AuthGuard />
+      </QueryClientProvider>
+    </TamaguiProvider>
   );
 }

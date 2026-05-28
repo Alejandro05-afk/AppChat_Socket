@@ -3,65 +3,80 @@ import { useProducts } from "@features/marketplace/application/presentation/hook
 import { SupabaseMarketplaceRepository } from "@features/marketplace/application/infrastructure/repositories/SupabaseMarketplaceRepository";
 import { Product } from "@features/marketplace/application/domain/entities/Product";
 import { useRouter, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-} from "react-native";
+import { useCallback, useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { FlatList, Alert, TouchableOpacity } from "react-native";
+import { YStack, XStack, Text, Input } from "tamagui";
+import { Image } from "expo-image";
+import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
+import { AppButton } from "@shared/presentation/components/ui/AppButton";
+import { SearchBar } from "@shared/presentation/components/ui/SearchBar";
+import { AnimatedListItem } from "@shared/presentation/components/ui/AnimatedListItem";
+import { LottieEmpty } from "@shared/presentation/components/ui/LottieEmpty";
+import { PulseFAB } from "@shared/presentation/components/ui/PulseFAB";
+import { AnimatedBottomSheet } from "@shared/presentation/components/ui/AnimatedBottomSheet";
+import { CardShimmer } from "@shared/presentation/components/ui/Shimmer";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const repo = new SupabaseMarketplaceRepository();
 
 export default function SellerDashboard() {
   const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
   const { sellerProducts, isLoadingSeller, createProduct, isCreating, createError } = useProducts();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const [modalVisible, setModalVisible] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const queryClient = useQueryClient();
+  const [search, setSearch] = useState("");
+
+  const { data: allInquiries = [] } = useQuery({
+    queryKey: ["seller-inquiries", user?.id],
+    queryFn: () => repo.getSellerInquiries(user!.id),
+    enabled: !!user,
+  });
+
+  const inquiryCount = allInquiries.length;
 
   useFocusEffect(
     useCallback(() => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["seller-products", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["seller-inquiries", user?.id] });
     }, [user?.id]),
   );
 
-  const handlePickImage = async () => {
+  const filtered = useMemo(
+    () => search.trim()
+      ? sellerProducts.filter(
+          (p) => p.name.toLowerCase().includes(search.toLowerCase()) ||
+            p.description?.toLowerCase().includes(search.toLowerCase()),
+        )
+      : sellerProducts,
+    [sellerProducts, search],
+  );
+
+  const handlePickImage = () => {
     Alert.alert("Agregar foto", "", [
-      {
-        text: "Tomar foto",
-        onPress: async () => {
-          const perm = await ImagePicker.requestCameraPermissionsAsync();
-          if (!perm.granted) { Alert.alert("Permiso requerido", "Se necesita acceso a la cámara."); return; }
-          const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.4 });
-          if (!result.canceled && result.assets[0]?.uri) setSelectedImage(result.assets[0].uri);
-        },
-      },
-      {
-        text: "Elegir de galería",
-        onPress: async () => {
-          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (!perm.granted) { Alert.alert("Permiso requerido", "Se requiere acceso a la galería."); return; }
-          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.4 });
-          if (!result.canceled && result.assets[0]?.uri) setSelectedImage(result.assets[0].uri);
-        },
-      },
+      { text: "Tomar foto", onPress: async () => {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) { Alert.alert("Permiso requerido"); return; }
+        const r = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.4 });
+        if (!r.canceled && r.assets[0]?.uri) setSelectedImage(r.assets[0].uri);
+      }},
+      { text: "Elegir de galería", onPress: async () => {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) { Alert.alert("Permiso requerido"); return; }
+        const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.4 });
+        if (!r.canceled && r.assets[0]?.uri) setSelectedImage(r.assets[0].uri);
+      }},
       { text: "Cancelar", style: "cancel" },
     ]);
   };
@@ -71,157 +86,299 @@ export default function SellerDashboard() {
     setIsUploading(true);
     try {
       let imageUrl: string | undefined;
-      if (selectedImage) {
-        imageUrl = await repo.uploadProductImage(selectedImage);
-      }
+      if (selectedImage) imageUrl = await repo.uploadProductImage(selectedImage);
       createProduct({
-        sellerId: user!.id,
-        name: name.trim(),
-        description: description.trim(),
-        price: parseFloat(price),
-        imageUrl,
+        sellerId: user!.id, name: name.trim(), description: description.trim(),
+        price: parseFloat(price), imageUrl,
       });
-      setModalVisible(false);
-      setName("");
-      setDescription("");
-      setPrice("");
-      setSelectedImage(null);
-    } catch (e) {
-      console.error('Error al crear producto:', e);
-      Alert.alert("Error", "No se pudo subir la imagen. Revisa que el bucket 'product-images' tenga política de INSERT.");
-    } finally {
-      setIsUploading(false);
-    }
+      setModalVisible(false); setName(""); setDescription(""); setPrice(""); setSelectedImage(null);
+    } catch { Alert.alert("Error", "No se pudo subir la imagen."); }
+    finally { setIsUploading(false); }
   };
 
-  const renderProduct = ({ item }: { item: Product }) => (
-    <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.85}
-      onPress={() => router.push(`/product/${item.id}/inquiries`)}
-    >
-      {item.imageUrl ? (
-        <Image source={{ uri: item.imageUrl }} style={styles.productImage} />
-      ) : null}
-      <View style={styles.cardHeader}>
-        <Text style={styles.productName}>{item.name}</Text>
-        <Text style={styles.productPrice}>${item.price.toFixed(2)}</Text>
-      </View>
-      {item.description ? <Text style={styles.productDesc}>{item.description}</Text> : null}
-    </TouchableOpacity>
-  );
+  const handleLogout = () => {
+    Alert.alert("Cerrar sesión", "¿Estás seguro?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Salir", style: "destructive", onPress: () => { setUser(null); router.replace("/(auth)/login"); } },
+    ]);
+  };
 
-  if (isLoadingSeller) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#7C3AED" />
-      </View>
-    );
-  }
+  const renderProduct = ({ item, index }: { item: Product; index: number }) => (
+    <AnimatedListItem index={index}>
+      <TouchableOpacity
+        onPress={() => router.push(`/product/${item.id}/inquiries`)}
+        activeOpacity={0.92}
+        style={{ marginBottom: 14 }}
+      >
+        <YStack
+          backgroundColor="rgba(255,255,255,0.06)"
+          borderRadius={20}
+          overflow="hidden"
+          borderWidth={1}
+          borderColor="rgba(255,255,255,0.10)"
+        >
+          {item.imageUrl ? (
+            <Image
+              source={{ uri: item.imageUrl }}
+              style={{
+                width: "100%", height: 180,
+                borderTopLeftRadius: 19, borderTopRightRadius: 19,
+                backgroundColor: "#22263A",
+              }}
+              contentFit="cover" transition={300}
+            />
+          ) : (
+            <YStack
+              height={140}
+              backgroundColor="$bg300"
+              justifyContent="center" alignItems="center"
+            >
+              <Feather name="package" size={40} color="#8B5CF6" style={{ opacity: 0.4 }} />
+            </YStack>
+          )}
+          <YStack padding={16} gap={8}>
+            <XStack justifyContent="space-between" alignItems="center">
+              <XStack gap={8} alignItems="center" flex={1}>
+                <YStack
+                  width={24} height={24} borderRadius={12}
+                  backgroundColor="rgba(139,92,246,0.2)"
+                  justifyContent="center" alignItems="center"
+                >
+                  <Feather name="tag" size={12} color="#8B5CF6" />
+                </YStack>
+                <Text color="white" fontWeight="700" fontSize={17} flex={1} numberOfLines={1}>
+                  {item.name}
+                </Text>
+              </XStack>
+              <XStack
+                backgroundColor="rgba(139,92,246,0.15)"
+                paddingHorizontal={12} paddingVertical={6}
+                borderRadius={8}
+                gap={4} alignItems="center"
+              >
+                <Feather name="dollar-sign" size={11} color="#8B5CF6" />
+                <Text color="$seller" fontWeight="700" fontSize={15}>
+                  {item.price.toFixed(2)}
+                </Text>
+              </XStack>
+            </XStack>
+            {item.description && (
+              <XStack gap={6} alignItems="flex-start">
+                <Feather name="file-text" size={13} color="#6B7280" style={{ marginTop: 2 }} />
+                <Text color="$textSecondary" fontSize={13} numberOfLines={2} flex={1}>
+                  {item.description}
+                </Text>
+              </XStack>
+            )}
+            <XStack
+              backgroundColor="rgba(139,92,246,0.15)"
+              borderRadius={8} paddingHorizontal={10} paddingVertical={4}
+              alignSelf="flex-start" marginTop={2}
+              gap={5} alignItems="center"
+            >
+              <Feather name="check-circle" size={12} color="#8B5CF6" />
+              <Text fontSize={12} fontWeight="600" color="$seller">Activo</Text>
+            </XStack>
+          </YStack>
+        </YStack>
+      </TouchableOpacity>
+    </AnimatedListItem>
+  );
 
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={sellerProducts}
-        keyExtractor={(p) => p.id}
-        renderItem={renderProduct}
-        contentContainerStyle={sellerProducts.length === 0 ? styles.emptyList : styles.list}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No tienes productos aún</Text>
-            <Text style={styles.emptySub}>Crea tu primer producto para empezar a vender</Text>
-          </View>
-        }
+    <YStack flex={1} backgroundColor="$bg100" paddingTop={insets.top}>
+      {/* Purple gradient overlay */}
+      <LinearGradient
+        colors={['rgba(139,92,246,0.18)', 'rgba(139,92,246,0.06)', 'transparent']}
+        locations={[0, 0.3, 0.7]}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 300 }}
       />
 
-      <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
-        <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
+      {/* Header */}
+      <YStack paddingHorizontal={20} paddingTop={8} paddingBottom={4}>
+        <XStack justifyContent="space-between" alignItems="center">
+          <YStack>
+            <XStack gap={6} alignItems="center" marginBottom={1}>
+              <YStack
+                width={18} height={18} borderRadius={9}
+                backgroundColor="rgba(139,92,246,0.25)"
+                justifyContent="center" alignItems="center"
+              >
+                <Feather name="shopping-bag" size={10} color="#A78BFA" />
+              </YStack>
+              <Text fontSize={10} fontWeight="700" color="#A78BFA" textTransform="uppercase" letterSpacing={1.2}>
+                Mi Tienda
+              </Text>
+            </XStack>
+            <Text fontSize={24} fontWeight="800" color="white" letterSpacing={-0.6}>
+              Dashboard
+            </Text>
+            <Text fontSize={12} color="$textSecondary" fontWeight="500" marginTop={1}>
+              Gestiona tus productos y consultas
+            </Text>
+          </YStack>
+          <TouchableOpacity
+            onPress={handleLogout}
+            style={{
+              width: 36, height: 36, borderRadius: 18,
+              backgroundColor: "rgba(255,255,255,0.08)",
+              justifyContent: "center", alignItems: "center",
+            }}
+          >
+            <Feather name="log-out" size={15} color="#9CA3AF" />
+          </TouchableOpacity>
+        </XStack>
+      </YStack>
 
-      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-          <View style={styles.overlay}>
-            <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setModalVisible(false)} />
-            <View style={styles.dialog}>
-              <Text style={styles.dialogTitle}>Nuevo Producto</Text>
+      {/* Metrics */}
+      <XStack gap={10} paddingHorizontal={20} marginBottom={16}>
+        <YStack
+          flex={1}
+          backgroundColor="rgba(139,92,246,0.12)"
+          borderRadius={16}
+          padding={12}
+          borderWidth={1}
+          borderColor="rgba(139,92,246,0.30)"
+        >
+          <YStack
+            width={28} height={28} borderRadius={14}
+            backgroundColor="rgba(139,92,246,0.20)"
+            justifyContent="center" alignItems="center"
+            marginBottom={6}
+          >
+            <Feather name="package" size={14} color="#A78BFA" />
+          </YStack>
+          <Text fontSize={22} fontWeight="800" color="#C4B5FD" letterSpacing={-0.5}>
+            {sellerProducts.length}
+          </Text>
+          <Text fontSize={11} color="$textSecondary" fontWeight="500" marginTop={1}>
+            Productos
+          </Text>
+        </YStack>
 
-              {createError ? <Text style={styles.error}>{createError}</Text> : null}
+        <YStack
+          flex={1}
+          backgroundColor="rgba(139,92,246,0.12)"
+          borderRadius={16}
+          padding={12}
+          borderWidth={1}
+          borderColor="rgba(139,92,246,0.30)"
+        >
+          <YStack
+            width={28} height={28} borderRadius={14}
+            backgroundColor="rgba(139,92,246,0.20)"
+            justifyContent="center" alignItems="center"
+            marginBottom={6}
+          >
+            <Feather name="message-circle" size={14} color="#A78BFA" />
+          </YStack>
+          <Text fontSize={22} fontWeight="800" color="#C4B5FD" letterSpacing={-0.5}>
+            {inquiryCount}
+          </Text>
+          <Text fontSize={11} color="$textSecondary" fontWeight="500" marginTop={1}>
+            Consultas
+          </Text>
+        </YStack>
+      </XStack>
 
-              <TextInput style={styles.input} placeholder="Nombre *" value={name} onChangeText={setName} />
-              <TextInput style={styles.input} placeholder="Descripción" value={description} onChangeText={setDescription} multiline />
-              <TextInput style={styles.input} placeholder="Precio *" value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
+      {/* Section title */}
+      <XStack paddingHorizontal={20} paddingBottom={6} alignItems="center" gap={6}>
+        <YStack
+          width={3} height={16} borderRadius={2}
+          backgroundColor="#8B5CF6"
+        />
+        <Text fontSize={15} fontWeight="700" color="white">
+          Mis Productos
+        </Text>
+        <YStack flex={1} height={1} backgroundColor="rgba(255,255,255,0.06)" />
+      </XStack>
 
-              <TouchableOpacity style={styles.imageBtn} onPress={handlePickImage}>
-                <Text style={styles.imageBtnText}>{selectedImage ? "Imagen seleccionada" : "Añadir imagen"}</Text>
-              </TouchableOpacity>
+      <YStack paddingHorizontal={16} paddingBottom={6}>
+        <SearchBar value={search} onChangeText={setSearch} placeholder="Buscar productos..." marginBottom={0} />
+      </YStack>
 
-              <TouchableOpacity style={[styles.createBtn, (isCreating || isUploading) && { opacity: 0.6 }]} onPress={handleCreate} disabled={isCreating || isUploading}>
-                {isCreating || isUploading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.createBtnText}>Crear Producto</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </View>
+      {isLoadingSeller ? (
+        <YStack padding={16}>{[0, 1].map((i) => <CardShimmer key={i} />)}</YStack>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(p) => p.id}
+          renderItem={renderProduct}
+          contentContainerStyle={
+            filtered.length === 0
+              ? { flex: 1, justifyContent: "center", padding: 24 }
+              : { padding: 16, paddingTop: 0, paddingBottom: 100 }
+          }
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            search.trim() ? (
+              <YStack alignItems="center" paddingTop={40}>
+                <Feather name="search" size={32} color="#6B7280" style={{ marginBottom: 12, opacity: 0.4 }} />
+                <Text fontSize={16} color="$textSecondary" textAlign="center">
+                  Sin resultados para "{search}"
+                </Text>
+              </YStack>
+            ) : (
+              <LottieEmpty
+                source={require("../../assets/animations/empty-products.json")}
+                title="No tienes productos"
+                subtitle="Crea tu primer producto para empezar a vender"
+                action={<AppButton variant="seller" onPress={() => setModalVisible(true)}>Crear primer producto</AppButton>}
+              />
+            )
+          }
+        />
+      )}
+
+      <PulseFAB onPress={() => setModalVisible(true)} color="#8B5CF6" icon="plus" />
+
+      <AnimatedBottomSheet visible={modalVisible} onClose={() => setModalVisible(false)}>
+        <Text fontSize={22} fontWeight="800" color="white" letterSpacing={-0.5} marginBottom={24}>
+          Nuevo Producto
+        </Text>
+
+        {createError ? <Text color="#EF4444" fontSize={13} marginBottom={12}>{createError}</Text> : null}
+
+        <Input
+          backgroundColor="$bg300" borderWidth={1} borderColor="rgba(255,255,255,0.08)"
+          borderRadius={14} padding={14} fontSize={16} color="white"
+          marginBottom={12}
+          placeholder="Nombre del producto *" value={name} onChangeText={setName}
+        />
+        <Input
+          backgroundColor="$bg300" borderWidth={1} borderColor="rgba(255,255,255,0.08)"
+          borderRadius={14} padding={14} fontSize={16} color="white"
+          marginBottom={12}
+          placeholder="Descripción" value={description} onChangeText={setDescription} multiline
+        />
+        <Input
+          backgroundColor="$bg300" borderWidth={1} borderColor="rgba(255,255,255,0.08)"
+          borderRadius={14} padding={14} fontSize={16} color="white"
+          marginBottom={16}
+          placeholder="Precio *" value={price} onChangeText={setPrice} keyboardType="decimal-pad"
+        />
+
+        <TouchableOpacity onPress={handlePickImage}>
+          <YStack
+            backgroundColor="$bg300" borderRadius={14} borderWidth={1}
+            borderColor={selectedImage ? "$seller" : "rgba(255,255,255,0.08)"}
+            padding={16} alignItems="center" marginBottom={16}
+          >
+            <Text fontSize={14} fontWeight="600" color={selectedImage ? "$seller" : "$textSecondary"}>
+              {selectedImage ? "✓ Imagen seleccionada" : "+ Añadir imagen"}
+            </Text>
+          </YStack>
+        </TouchableOpacity>
+
+        <AppButton
+          variant="seller" height={54}
+          loading={isCreating || isUploading}
+          disabled={isCreating || isUploading}
+          onPress={handleCreate}
+        >
+          Crear Producto
+        </AppButton>
+      </AnimatedBottomSheet>
+    </YStack>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5F3FF" },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F5F3FF" },
-  list: { padding: 16, paddingBottom: 100 },
-  emptyList: { flex: 1, justifyContent: "center", padding: 24 },
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: "#F3F4F6",
-  },
-  productImage: { width: '100%', height: 180, borderRadius: 12, marginBottom: 12, backgroundColor: '#E5E7EB' },
-  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  productName: { fontSize: 18, fontWeight: "700", color: "#1F2937" },
-  productPrice: { fontSize: 16, fontWeight: "700", color: "#7C3AED" },
-  productDesc: { fontSize: 14, color: "#6B7280", marginTop: 6 },
-  emptyContainer: { alignItems: "center" },
-  emptyTitle: { fontSize: 18, fontWeight: "700", color: "#1F2937" },
-  emptySub: { fontSize: 14, color: "#6B7280", marginTop: 6, textAlign: "center" },
-  fab: {
-    position: "absolute", right: 24, bottom: 24,
-    backgroundColor: "#7C3AED", width: 60, height: 60,
-    borderRadius: 30, justifyContent: "center", alignItems: "center",
-    shadowColor: "#7C3AED", shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35, shadowRadius: 12, elevation: 8,
-  },
-  fabText: { color: "#FFF", fontSize: 32, fontWeight: "300" },
-  overlay: { flex: 1, backgroundColor: "rgba(17, 24, 39, 0.6)", justifyContent: "flex-end" },
-  dialog: {
-    backgroundColor: "#FFF", borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 24, paddingBottom: 40,
-  },
-  dialogTitle: { fontSize: 20, fontWeight: "800", color: "#111827", marginBottom: 16 },
-  error: { color: "#EF4444", fontSize: 13, marginBottom: 12 },
-  input: {
-    backgroundColor: "#F9FAFB", borderWidth: 1, borderColor: "#E5E7EB",
-    borderRadius: 12, padding: 14, fontSize: 16, color: "#1F2937", marginBottom: 12,
-  },
-  imageBtn: {
-    backgroundColor: "#F3F4F6", borderRadius: 12, padding: 14,
-    alignItems: "center", marginBottom: 16,
-  },
-  imageBtnText: { fontSize: 15, fontWeight: "600", color: "#4B5563" },
-  createBtn: {
-    backgroundColor: "#7C3AED", borderRadius: 12, padding: 14, alignItems: "center",
-  },
-  createBtnText: { color: "#FFF", fontWeight: "600", fontSize: 15 },
-});

@@ -1,20 +1,31 @@
 import { useInquiry } from "@features/marketplace/application/presentation/hooks/useInquiry";
 import { InquiryMessage } from "@features/marketplace/application/domain/entities/Inquiry";
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  FlatList,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  ActivityIndicator,
-  Alert,
-} from "react-native";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { FlatList, Alert, KeyboardAvoidingView, Platform, TouchableOpacity } from "react-native";
+import { YStack, XStack, Text, Input } from "tamagui";
+import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import { AnimatedListItem } from "@shared/presentation/components/ui/AnimatedListItem";
+import { LottieLoader } from "@shared/presentation/components/ui/LottieLoader";
+import { Avatar } from "@shared/presentation/components/ui/Avatar";
+import { DateSeparator } from "@shared/presentation/components/ui/DateSeparator";
+import { AnimatedSendButton } from "@shared/presentation/components/ui/AnimatedSendButton";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+function formatTime(d: Date) {
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function groupByDate(msgs: InquiryMessage[]): { date: Date; items: InquiryMessage[] }[] {
+  const groups: { key: string; date: Date; items: InquiryMessage[] }[] = [];
+  for (const m of msgs) {
+    const key = m.createdAt.toDateString();
+    const g = groups.find((x) => x.key === key);
+    if (g) g.items.push(m);
+    else groups.push({ key, date: m.createdAt, items: [m] });
+  }
+  return groups;
+}
 
 interface InquiryChatProps {
   inquiryId: string;
@@ -26,6 +37,9 @@ export default function InquiryChat({ inquiryId, currentUserId }: InquiryChatPro
   const [input, setInput] = useState("");
   const [uploadingImg, setUploadingImg] = useState(false);
   const listRef = useRef<FlatList>(null);
+  const insets = useSafeAreaInsets();
+
+  const grouped = useMemo(() => groupByDate(messages), [messages]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -39,17 +53,17 @@ export default function InquiryChat({ inquiryId, currentUserId }: InquiryChatPro
     setInput("");
   }, [input, sendMessage, isSending]);
 
-  const pickImage = useCallback(async () => {
+  const pickImage = useCallback(() => {
     Alert.alert("Adjuntar imagen", "", [
       {
         text: "Tomar foto",
         onPress: async () => {
           const perm = await ImagePicker.requestCameraPermissionsAsync();
-          if (!perm.granted) { Alert.alert("Permiso requerido", "Se necesita acceso a la cámara."); return; }
-          const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.4 });
-          if (!result.canceled && result.assets[0]?.uri) {
+          if (!perm.granted) { Alert.alert("Permiso requerido"); return; }
+          const r = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.4 });
+          if (!r.canceled && r.assets[0]?.uri) {
             setUploadingImg(true);
-            try { await sendImageMessage(result.assets[0].uri); } catch { Alert.alert("Error", "No se pudo enviar la imagen."); }
+            try { await sendImageMessage(r.assets[0].uri); } catch { Alert.alert("Error", "No se pudo enviar."); }
             setUploadingImg(false);
           }
         },
@@ -58,11 +72,11 @@ export default function InquiryChat({ inquiryId, currentUserId }: InquiryChatPro
         text: "Elegir de galería",
         onPress: async () => {
           const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (!perm.granted) { Alert.alert("Permiso requerido", "Se necesita acceso a la galería."); return; }
-          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.4 });
-          if (!result.canceled && result.assets[0]?.uri) {
+          if (!perm.granted) { Alert.alert("Permiso requerido"); return; }
+          const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.4 });
+          if (!r.canceled && r.assets[0]?.uri) {
             setUploadingImg(true);
-            try { await sendImageMessage(result.assets[0].uri); } catch { Alert.alert("Error", "No se pudo enviar la imagen."); }
+            try { await sendImageMessage(r.assets[0].uri); } catch { Alert.alert("Error", "No se pudo enviar."); }
             setUploadingImg(false);
           }
         },
@@ -71,151 +85,138 @@ export default function InquiryChat({ inquiryId, currentUserId }: InquiryChatPro
     ]);
   }, [sendImageMessage]);
 
-  const renderMsg = ({ item }: { item: InquiryMessage }) => {
-    const isMe = item.senderId === currentUserId;
-    return (
-      <View style={[styles.row, isMe ? styles.rowOwn : styles.rowOther]}>
-        <View style={[styles.bubble, isMe ? styles.own : styles.other]}>
-          {!isMe && <Text style={styles.author}>@{item.senderUsername}</Text>}
-          {item.imageUrl ? (
-            <Image source={{ uri: item.imageUrl }} style={styles.msgImage} resizeMode="cover" />
-          ) : null}
-          {item.content ? (
-            <Text style={[styles.text, isMe ? styles.textOwn : styles.textOther]}>{item.content}</Text>
-          ) : null}
-          <Text style={[styles.time, isMe ? styles.timeOwn : styles.timeOther]}>
-            {item.createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </Text>
-        </View>
-      </View>
-    );
-  };
-
   if (isLoading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366F1" />
-      </View>
+      <LottieLoader
+        source={require("../../../../assets/animations/loading-dots.json")}
+        message="Cargando mensajes..."
+      />
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={{ flex: 1, backgroundColor: "#0F1117" }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 88}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : insets.top}
     >
       <FlatList
         ref={listRef}
-        data={messages}
-        keyExtractor={(m) => m.id}
-        renderItem={renderMsg}
-        contentContainerStyle={styles.messagesList}
+        data={grouped}
+        keyExtractor={(g) => g.key}
+        renderItem={({ item: group }) => (
+          <YStack>
+            <DateSeparator date={group.date} />
+            {group.items.map((msg: InquiryMessage, idx: number) => {
+              const isMe = msg.senderId === currentUserId;
+              const isFirst = idx === 0;
+              const prev = idx > 0 ? group.items[idx - 1] : null;
+              const showAvatar = !isMe && (isFirst || prev?.senderId !== msg.senderId);
+
+              return (
+                <AnimatedListItem key={msg.id} index={idx}>
+                  <XStack
+                    marginBottom={3}
+                    maxWidth="82%"
+                    alignSelf={isMe ? "flex-end" : "flex-start"}
+                    paddingHorizontal={16}
+                    gap={8}
+                  >
+                    {!isMe && showAvatar ? (
+                      <Avatar name={msg.senderUsername} size={30} border />
+                    ) : !isMe ? (
+                      <YStack width={30} />
+                    ) : null}
+
+                    <YStack
+                      borderRadius={20}
+                      paddingHorizontal={14}
+                      paddingVertical={9}
+                      backgroundColor={isMe ? "#2563EB" : "#22263A"}
+                      borderWidth={isMe ? 0 : 1}
+                      borderColor={isMe ? undefined : "rgba(255,255,255,0.08)"}
+                      borderBottomRightRadius={isMe ? 4 : 20}
+                      borderBottomLeftRadius={isMe ? 20 : 4}
+                    >
+                      {!isMe && showAvatar && (
+                        <Text fontSize={11} fontWeight="700" color="$blue400" marginBottom={2}>
+                          @{msg.senderUsername}
+                        </Text>
+                      )}
+                      {msg.imageUrl ? (
+                        <Image
+                          source={{ uri: msg.imageUrl }}
+                          style={{
+                            width: 200, height: 150, borderRadius: 12,
+                            marginBottom: msg.content ? 6 : 0,
+                            backgroundColor: "#2A2F47",
+                          }}
+                          contentFit="cover"
+                        />
+                      ) : null}
+                      {msg.content ? (
+                        <Text fontSize={16} lineHeight={21} color="white">
+                          {msg.content}
+                        </Text>
+                      ) : null}
+                      <Text fontSize={10} marginTop={3} alignSelf="flex-end"
+                        color={isMe ? "rgba(255,255,255,0.6)" : "$textMuted"}>
+                        {formatTime(msg.createdAt)}
+                      </Text>
+                    </YStack>
+                  </XStack>
+                </AnimatedListItem>
+              );
+            })}
+          </YStack>
+        )}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         showsVerticalScrollIndicator={false}
       />
-      <View style={styles.inputContainer}>
-        <TouchableOpacity onPress={pickImage} style={styles.imageBtn} disabled={uploadingImg}>
-          {uploadingImg ? (
-            <ActivityIndicator color="#6366F1" size="small" />
-          ) : (
-            <Text style={styles.imageBtnIcon}>+</Text>
-          )}
-        </TouchableOpacity>
-        <TextInput
-          style={styles.input}
-          value={input}
-          onChangeText={setInput}
-          placeholder="Escribe un mensaje..."
-          placeholderTextColor="#9CA3AF"
-          multiline
-          maxLength={500}
-        />
-        <TouchableOpacity
-          style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
-          onPress={handleSend}
-          disabled={!input.trim() || isSending}
-        >
-          {isSending ? (
-            <ActivityIndicator color="#FFF" size="small" />
-          ) : (
-            <Text style={styles.sendIcon}>➤</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+
+      <YStack
+        padding={12}
+        paddingBottom={insets.bottom + 12}
+        backgroundColor="$bg200"
+        borderTopWidth={1}
+        borderTopColor="rgba(255,255,255,0.08)"
+      >
+        <XStack alignItems="center" gap={8}>
+          <TouchableOpacity onPress={pickImage} disabled={uploadingImg || isSending}>
+            <YStack
+              width={42} height={42} borderRadius={21}
+              backgroundColor="$bg300"
+              justifyContent="center" alignItems="center"
+            >
+              <Text fontSize={22} color="$blue400" fontWeight="300">
+                {uploadingImg ? "..." : "+"}
+              </Text>
+            </YStack>
+          </TouchableOpacity>
+
+          <Input
+            flex={1}
+            backgroundColor="$bg300"
+            borderRadius={22}
+            paddingHorizontal={18}
+            paddingVertical={10}
+            fontSize={15}
+            color="white"
+            placeholderTextColor="$textMuted"
+            maxHeight={100}
+            placeholder="Escribe un mensaje..."
+            value={input}
+            onChangeText={setInput}
+            multiline
+            maxLength={500}
+          />
+
+          <AnimatedSendButton onPress={handleSend} disabled={!input.trim() || isSending}>
+            <Text color="white" fontSize={18} fontWeight="700">›</Text>
+          </AnimatedSendButton>
+        </XStack>
+      </YStack>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F3F4F6" },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F3F4F6" },
-  messagesList: { paddingHorizontal: 16, paddingVertical: 20, paddingBottom: 30 },
-  row: { flexDirection: "row", marginVertical: 6 },
-  rowOwn: { justifyContent: "flex-end" },
-  rowOther: { justifyContent: "flex-start" },
-  bubble: {
-    maxWidth: "78%",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  own: { backgroundColor: "#6366F1", borderBottomRightRadius: 4 },
-  other: { backgroundColor: "#FFF", borderBottomLeftRadius: 4, borderWidth: 1, borderColor: "#E5E7EB" },
-  author: { fontSize: 12, fontWeight: "700", color: "#4F46E5", marginBottom: 4 },
-  msgImage: {
-    width: 220,
-    height: 180,
-    borderRadius: 12,
-    marginBottom: 4,
-  },
-  text: { fontSize: 15, lineHeight: 20 },
-  textOwn: { color: "#FFF" },
-  textOther: { color: "#1F2937" },
-  time: { fontSize: 10, marginTop: 4, alignSelf: "flex-end" },
-  timeOwn: { color: "rgba(255, 255, 255, 0.7)" },
-  timeOther: { color: "#9CA3AF" },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    backgroundColor: "#FFF",
-    borderTopWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: 4,
-  },
-  imageBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F3F4F6",
-  },
-  imageBtnIcon: { fontSize: 20 },
-  input: {
-    flex: 1,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: "#1F2937",
-    maxHeight: 100,
-  },
-  sendBtn: {
-    backgroundColor: "#6366F1",
-    borderRadius: 22,
-    width: 44,
-    height: 44,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  sendBtnDisabled: { backgroundColor: "#E5E7EB" },
-  sendIcon: { color: "#FFF", fontSize: 18, marginLeft: 2 },
-});

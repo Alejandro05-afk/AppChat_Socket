@@ -9,6 +9,7 @@
   ],
   "compilerOptions": {
     "strict": true,
+    "skipLibCheck": true,
     "baseUrl": ".",
     "lib": [
       "ESNext"

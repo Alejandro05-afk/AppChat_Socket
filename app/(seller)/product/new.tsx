@@ -1,6 +1,6 @@
 import { useAuthStore } from "@features/auth/application/presentation/store/authStore";
 import { useProducts } from "@features/marketplace/application/presentation/hooks/useProducts";
-import { SupabaseMarketplaceRepository } from "@features/marketplace/application/infrastructure/repositories/SupabaseMarketplaceRepository";
+import { AppwriteMarketplaceRepository } from "@features/marketplace/application/infrastructure/repositories/AppwriteMarketplaceRepository";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ScrollView, Alert, TouchableOpacity } from "react-native";
@@ -10,7 +10,7 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 import { AppButton } from "@shared/presentation/components/ui/AppButton";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const repo = new SupabaseMarketplaceRepository();
+const repo = new AppwriteMarketplaceRepository();
 
 export default function NewProductScreen() {
   const user = useAuthStore((s) => s.user);

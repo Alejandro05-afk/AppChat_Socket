@@ -2,9 +2,9 @@ import { useAuthStore } from "@features/auth/application/presentation/store/auth
 import { CreateRoomUseCase } from "@features/chat/application/use-cases/CreateRoomUseCase";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Room } from "../../domain/entities/Message";
-import { SupabaseChatRepository } from "../../infrastructure/repositories/SupabaseChatRepository";
+import { AppwriteChatRepository } from "../../infrastructure/repositories/AppwriteChatRepository";
 
-const chatRepo = new SupabaseChatRepository();
+const chatRepo = new AppwriteChatRepository();
 const createRoomUseCase = new CreateRoomUseCase(chatRepo);
 
 export function useRooms() {

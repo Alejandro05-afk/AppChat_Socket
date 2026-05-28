@@ -1,3 +1,4 @@
+import "@shared/infrastructure/appwrite/polyfill";
 import { Platform } from "react-native";
 
 if (__DEV__ && Platform.OS === "android") {

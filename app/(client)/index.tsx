@@ -1,6 +1,6 @@
 import { useAuthStore } from "@features/auth/application/presentation/store/authStore";
 import { useProducts } from "@features/marketplace/application/presentation/hooks/useProducts";
-import { SupabaseMarketplaceRepository } from "@features/marketplace/application/infrastructure/repositories/SupabaseMarketplaceRepository";
+import { getOrCreateInquiry } from "@features/marketplace/application/presentation/hooks/useInquiry";
 import { Product } from "@features/marketplace/application/domain/entities/Product";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useCallback, useState, useMemo } from "react";
@@ -18,8 +18,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const CLIENT = '#0EA5E9';
 const CLIENT_LIGHT = '#38BDF8';
-
-const repo = new SupabaseMarketplaceRepository();
 
 export default function CatalogScreen() {
   const user = useAuthStore((s) => s.user);
@@ -48,10 +46,10 @@ export default function CatalogScreen() {
   const handleProductPress = useCallback(async (product: Product) => {
     if (!user) return;
     try {
-      const inquiry = await repo.getOrCreateInquiry(product.id, user.id, product.sellerId);
+      const inquiry = await getOrCreateInquiry(product.id, user.id, product.sellerId);
       router.push(`/inquiry/${inquiry.id}`);
     } catch (e) { console.error("Error al crear consulta:", e); }
-  }, [user]);
+    }, [user]);
 
   const handleLogout = () => {
     Alert.alert("Cerrar sesión", "¿Estás seguro?", [

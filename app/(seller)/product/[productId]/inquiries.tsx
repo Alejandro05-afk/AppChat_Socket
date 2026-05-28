@@ -1,5 +1,5 @@
 import { useAuthStore } from "@features/auth/application/presentation/store/authStore";
-import { SupabaseMarketplaceRepository } from "@features/marketplace/application/infrastructure/repositories/SupabaseMarketplaceRepository";
+import { AppwriteMarketplaceRepository } from "@features/marketplace/application/infrastructure/repositories/AppwriteMarketplaceRepository";
 import { Inquiry } from "@features/marketplace/application/domain/entities/Inquiry";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -10,7 +10,7 @@ import { AnimatedListItem } from "@shared/presentation/components/ui/AnimatedLis
 import { LottieEmpty } from "@shared/presentation/components/ui/LottieEmpty";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const repo = new SupabaseMarketplaceRepository();
+const repo = new AppwriteMarketplaceRepository();
 
 export default function InquiriesScreen() {
   const { productId } = useLocalSearchParams<{ productId: string }>();

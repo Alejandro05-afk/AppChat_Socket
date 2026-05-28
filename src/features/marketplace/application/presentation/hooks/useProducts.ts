@@ -1,13 +1,16 @@
 import { useAuthStore } from "@features/auth/application/presentation/store/authStore";
-import { SupabaseMarketplaceRepository } from "../../infrastructure/repositories/SupabaseMarketplaceRepository";
+import { AppwriteMarketplaceRepository } from "../../infrastructure/repositories/AppwriteMarketplaceRepository";
 import { CreateProductUseCase } from "../../use-cases/CreateProductUseCase";
 import { GetProductsUseCase, GetSellerProductsUseCase } from "../../use-cases/GetProductsUseCase";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@shared/infrastructure/supabase/client";
+import { appwriteClient, databases } from "@shared/infrastructure/appwrite/client";
 import { useEffect } from "react";
 import { Product } from "../../domain/entities/Product";
 
-const repo = new SupabaseMarketplaceRepository();
+const DATABASE_ID = process.env.EXPO_PUBLIC_APPWRITE_DATABASE_ID!;
+const PRODUCTS_COLLECTION_ID = process.env.EXPO_PUBLIC_APPWRITE_PRODUCTS_COLLECTION_ID!;
+
+const repo = new AppwriteMarketplaceRepository();
 const getProductsUC = new GetProductsUseCase(repo);
 const getSellerProductsUC = new GetSellerProductsUseCase(repo);
 const createProductUC = new CreateProductUseCase(repo);
@@ -30,44 +33,38 @@ export function useProducts() {
 
   useEffect(() => {
     if (!user) return;
-    const channel = supabase
-      .channel("products-realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "products" },
-        async (payload) => {
-          const { data } = await supabase
-            .from("products")
-            .select("*, profiles(username)")
-            .eq("id", payload.new.id)
-            .single();
-          if (!data) return;
-          const p = {
-            id: data.id,
-            sellerId: data.seller_id,
-            sellerUsername: data.profiles?.username ?? "",
-            name: data.name,
-            description: data.description ?? "",
-            price: Number(data.price ?? 0),
-            imageUrl: data.image_url ?? undefined,
-            createdAt: new Date(data.created_at),
-          } satisfies Product;
-
-          queryClient.setQueryData(["products"], (old: Product[] = []) => {
-            if (old.some((x) => x.id === p.id)) return old;
-            return [p, ...old];
-          });
-
-          if (p.sellerId === user.id) {
-            queryClient.setQueryData(["seller-products", user.id], (old: Product[] = []) => {
-              if (old.some((x) => x.id === p.id)) return old;
-              return [p, ...old];
-            });
-          }
-        },
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const channel = `databases.${DATABASE_ID}.collections.${PRODUCTS_COLLECTION_ID}.documents`;
+    const unsubscribe = appwriteClient.subscribe(channel, async (response) => {
+      const isCreate = response.events.some((e) => e.endsWith(".create"));
+      if (!isCreate) return;
+      const payload = response.payload as any;
+      let sellerName = "";
+      try {
+        const userDoc = await databases.getDocument(DATABASE_ID, process.env.EXPO_PUBLIC_APPWRITE_USERS_COLLECTION_ID!, payload.seller_id);
+        sellerName = (userDoc as any).name ?? "";
+      } catch {}
+      const p: Product = {
+        id: payload.$id,
+        sellerId: payload.seller_id,
+        sellerUsername: sellerName,
+        name: payload.name,
+        description: payload.description ?? "",
+        price: Number(payload.price ?? 0),
+        imageUrl: payload.image_url ?? undefined,
+        createdAt: new Date(payload.$createdAt),
+      };
+      queryClient.setQueryData(["products"], (old: Product[] = []) => {
+        if (old.some((x) => x.id === p.id)) return old;
+        return [p, ...old];
+      });
+      if (p.sellerId === user.id) {
+        queryClient.setQueryData(["seller-products", user.id], (old: Product[] = []) => {
+          if (old.some((x) => x.id === p.id)) return old;
+          return [p, ...old];
+        });
+      }
+    });
+    return unsubscribe;
   }, [user?.id]);
 
   const createMutation = useMutation({

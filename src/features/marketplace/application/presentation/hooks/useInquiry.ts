@@ -1,12 +1,16 @@
 import { useAuthStore } from "@features/auth/application/presentation/store/authStore";
-import { SupabaseMarketplaceRepository } from "../../infrastructure/repositories/SupabaseMarketplaceRepository";
+import { AppwriteMarketplaceRepository } from "../../infrastructure/repositories/AppwriteMarketplaceRepository";
 import { SubscribeToInquiryUseCase } from "../../use-cases/SubscribeToInquiryUseCase";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { InquiryMessage } from "../../domain/entities/Inquiry";
+import { Inquiry, InquiryMessage } from "../../domain/entities/Inquiry";
 
-const repo = new SupabaseMarketplaceRepository();
+const repo = new AppwriteMarketplaceRepository();
 const subscribeUC = new SubscribeToInquiryUseCase(repo);
+
+export function getOrCreateInquiry(productId: string, clientId: string, sellerId: string): Promise<Inquiry> {
+  return repo.getOrCreateInquiry(productId, clientId, sellerId);
+}
 
 export function useInquiry(inquiryId: string) {
   const user = useAuthStore((s) => s.user);
@@ -31,17 +35,17 @@ export function useInquiry(inquiryId: string) {
   }, [inquiryId]);
 
   const sendMutation = useMutation({
-    mutationFn: async ({ content, imageUrl }: { content: string; imageUrl?: string }) => {
-      return repo.sendMessage(inquiryId, user!.id, content, imageUrl);
+    mutationFn: async ({ content }: { content: string }) => {
+      return repo.sendMessage(inquiryId, user!.id, content);
     },
-    onMutate: async ({ content, imageUrl }) => {
+    onMutate: async ({ content }) => {
       const temp: InquiryMessage = {
         id: `temp-${Date.now()}`,
         inquiryId,
         senderId: user!.id,
         senderUsername: user!.username,
         content,
-        imageUrl,
+        imageUrl: undefined,
         createdAt: new Date(),
       };
       queryClient.setQueryData(["inquiry-messages", inquiryId], (old: InquiryMessage[] = []) => [...old, temp]);
@@ -61,15 +65,9 @@ export function useInquiry(inquiryId: string) {
     },
   });
 
-  const sendImageMessage = async (uri: string) => {
-    const imageUrl = await repo.uploadInquiryImage(uri);
-    sendMutation.mutate({ content: "", imageUrl });
-  };
-
   return {
     messages,
     sendMessage: (content: string) => sendMutation.mutate({ content }),
-    sendImageMessage,
     isLoading,
     isSending: sendMutation.isPending,
   };

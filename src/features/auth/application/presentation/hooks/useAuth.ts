@@ -2,12 +2,12 @@ import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { LoginUseCase } from "../../use-cases/LoginUsecase"; 
 import { RegisterUseCase } from "../../use-cases/RegisterUsecase"; 
-import { SupabaseAuthRepository } from "../../infrastructure/repositories/SupabaseAuthRepository";
+import { AppwriteAuthRepository } from "../../infrastructure/repositories/AppwriteAuthRepository";
 import { useAuthStore } from "../store/authStore"; 
 
 type RegisterDto = { email: string; password: string; username: string; role?: 'seller' | 'client' };
 
-const authRepo = new SupabaseAuthRepository();
+const authRepo = new AppwriteAuthRepository();
 const loginUseCase = new LoginUseCase(authRepo);
 const registerUseCase = new RegisterUseCase(authRepo);
 
@@ -15,7 +15,6 @@ export function useAuth() {
   const { user, setUser } = useAuthStore();
   const router = useRouter();
 
-  // useMutation de TanStack Query maneja isLoading y error automáticamente
   const loginMutation = useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) =>
       loginUseCase.execute(email, password),
@@ -34,6 +33,15 @@ export function useAuth() {
     },
   });
 
+  const savePushToken = async (token: string) => {
+    if (!user) return;
+    try {
+      await authRepo.updatePushToken(user.id, token);
+    } catch (e) {
+      console.warn("Error guardando push token:", e);
+    }
+  };
+
   const logout = async () => {
     try {
       await authRepo.logout();
@@ -47,6 +55,7 @@ export function useAuth() {
     user,
     login: loginMutation.mutate,
     register: registerMutation.mutate,
+    savePushToken,
     logout,
     isLoading: loginMutation.isPending || registerMutation.isPending,
     error:

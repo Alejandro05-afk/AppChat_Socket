@@ -1,7 +1,6 @@
 import "./silenceWarning";
 import { useAuthStore } from "@features/auth/application/presentation/store/authStore";
-import { SupabaseAuthRepository } from "@features/auth/application/infrastructure/repositories/SupabaseAuthRepository";
-import { supabase } from "@shared/infrastructure/supabase/client";
+import { AppwriteAuthRepository } from "@features/auth/application/infrastructure/repositories/AppwriteAuthRepository";
 import { useGlobalNotifications } from "@shared/presentation/hooks/useGlobalNotifications";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Slot, useRouter, useSegments } from "expo-router";
@@ -20,9 +19,8 @@ LogBox.ignoreLogs([
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
 });
-const authRepo = new SupabaseAuthRepository();
+const authRepo = new AppwriteAuthRepository();
 
-// Configurar cómo se comportan las notificaciones cuando la app está abierta
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -81,7 +79,6 @@ function AuthGuard() {
     setIsMounted(true);
   }, []);
 
-  // Navegar a la sala correcta cuando el usuario toca una notificación push
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const roomId = response.notification.request.content.data?.roomId as string | undefined;
@@ -93,21 +90,7 @@ function AuthGuard() {
   }, [user?.id]);
 
   useEffect(() => {
-    // Restaurar sesión desde AsyncStorage al iniciar la app
     authRepo.getCurrentUser().then(setUser);
-
-    // Escuchar cambios de sesión: token expirado, logout en otro dispositivo
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session) {
-        const user = await authRepo.getCurrentUser();
-        setUser(user);
-      } else {
-        setUser(null);
-      }
-    });
-    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -120,11 +103,12 @@ function AuthGuard() {
 
       registerForPushNotificationsAsync().then(async (token) => {
         if (token) {
-          await supabase
-            .from("profiles")
-            .update({ push_token: token })
-            .eq("id", user.id);
-          console.log("Token push guardado exitosamente en Supabase:", token);
+          try {
+            await authRepo.updatePushToken(user.id, token);
+            console.log("Token push guardado en Appwrite:", token);
+          } catch (e) {
+            console.warn("Error guardando token push:", e);
+          }
         }
       });
     }

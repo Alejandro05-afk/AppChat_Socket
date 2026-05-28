@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { FlatList, Alert, KeyboardAvoidingView, Platform, TouchableOpacity } from "react-native";
 import { YStack, XStack, Text, Input } from "tamagui";
 import { Image } from "expo-image";
-import * as ImagePicker from "expo-image-picker";
 import { AnimatedListItem } from "@shared/presentation/components/ui/AnimatedListItem";
 import { LottieLoader } from "@shared/presentation/components/ui/LottieLoader";
 import { Avatar } from "@shared/presentation/components/ui/Avatar";
@@ -33,7 +32,7 @@ interface InquiryChatProps {
 }
 
 export default function InquiryChat({ inquiryId, currentUserId }: InquiryChatProps) {
-  const { messages, sendMessage, sendImageMessage, isLoading, isSending } = useInquiry(inquiryId);
+  const { messages, sendMessage, isLoading, isSending } = useInquiry(inquiryId);
   const [input, setInput] = useState("");
   const [uploadingImg, setUploadingImg] = useState(false);
   const listRef = useRef<FlatList>(null);
@@ -54,36 +53,8 @@ export default function InquiryChat({ inquiryId, currentUserId }: InquiryChatPro
   }, [input, sendMessage, isSending]);
 
   const pickImage = useCallback(() => {
-    Alert.alert("Adjuntar imagen", "", [
-      {
-        text: "Tomar foto",
-        onPress: async () => {
-          const perm = await ImagePicker.requestCameraPermissionsAsync();
-          if (!perm.granted) { Alert.alert("Permiso requerido"); return; }
-          const r = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.4 });
-          if (!r.canceled && r.assets[0]?.uri) {
-            setUploadingImg(true);
-            try { await sendImageMessage(r.assets[0].uri); } catch { Alert.alert("Error", "No se pudo enviar."); }
-            setUploadingImg(false);
-          }
-        },
-      },
-      {
-        text: "Elegir de galería",
-        onPress: async () => {
-          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (!perm.granted) { Alert.alert("Permiso requerido"); return; }
-          const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.4 });
-          if (!r.canceled && r.assets[0]?.uri) {
-            setUploadingImg(true);
-            try { await sendImageMessage(r.assets[0].uri); } catch { Alert.alert("Error", "No se pudo enviar."); }
-            setUploadingImg(false);
-          }
-        },
-      },
-      { text: "Cancelar", style: "cancel" },
-    ]);
-  }, [sendImageMessage]);
+    Alert.alert("Enviar imagen", "Las imágenes no están disponibles en esta versión.", [{ text: "OK" }]);
+  }, []);
 
   if (isLoading) {
     return (

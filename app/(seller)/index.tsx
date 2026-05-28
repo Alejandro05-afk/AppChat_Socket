@@ -1,6 +1,6 @@
 import { useAuthStore } from "@features/auth/application/presentation/store/authStore";
 import { useProducts } from "@features/marketplace/application/presentation/hooks/useProducts";
-import { SupabaseMarketplaceRepository } from "@features/marketplace/application/infrastructure/repositories/SupabaseMarketplaceRepository";
+import { AppwriteMarketplaceRepository } from "@features/marketplace/application/infrastructure/repositories/AppwriteMarketplaceRepository";
 import { Product } from "@features/marketplace/application/domain/entities/Product";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useCallback, useState, useMemo } from "react";
@@ -20,7 +20,7 @@ import { AnimatedBottomSheet } from "@shared/presentation/components/ui/Animated
 import { CardShimmer } from "@shared/presentation/components/ui/Shimmer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const repo = new SupabaseMarketplaceRepository();
+const repo = new AppwriteMarketplaceRepository();
 
 export default function SellerDashboard() {
   const user = useAuthStore((s) => s.user);
